@@ -39,7 +39,8 @@ class SystemMonitor:
                         'cpu_percent': round(cpu_percent, 2),
                         'memory_percent': round(memory_percent, 2)
                     })
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                except (psutil.NoSuchProcess, psutil.AccessDenied, OSError):
+                    # Skip problematic processes silently
                     continue
             
             # Sort by CPU usage
@@ -55,26 +56,117 @@ class SystemMonitor:
         try:
             connections = []
             
-            # Get all network connections
-            for conn in psutil.net_connections(kind='inet'):
-                if conn.status == 'LISTEN':
-                    try:
-                        connections.append({
-                            'pid': conn.pid,
-                            'local_address': f"{conn.laddr.ip}:{conn.laddr.port}" if conn.laddr else "N/A",
-                            'remote_address': f"{conn.raddr.ip}:{conn.raddr.port}" if conn.raddr else "N/A",
-                            'status': conn.status,
-                            'family': 'IPv4' if conn.family == socket.AF_INET else 'IPv6'
-                        })
-                    except (psutil.NoSuchProcess, psutil.AccessDenied, AttributeError):
-                        continue
+            # Try psutil first
+            try:
+                net_connections = psutil.net_connections(kind='inet')
+                
+                for conn in net_connections:
+                    if conn.status == 'LISTEN':
+                        try:
+                            # Safely get connection info
+                            pid = conn.pid if conn.pid else 'N/A'
+                            local_addr = "N/A"
+                            remote_addr = "N/A"
+                            family = "Unknown"
+                            
+                            if conn.laddr:
+                                local_addr = f"{conn.laddr.ip}:{conn.laddr.port}"
+                            
+                            if conn.raddr:
+                                remote_addr = f"{conn.raddr.ip}:{conn.raddr.port}"
+                            
+                            if conn.family == socket.AF_INET:
+                                family = 'IPv4'
+                            elif conn.family == socket.AF_INET6:
+                                family = 'IPv6'
+                            
+                            connections.append({
+                                'pid': pid,
+                                'local_address': local_addr,
+                                'remote_address': remote_addr,
+                                'status': conn.status,
+                                'family': family
+                            })
+                            
+                        except (psutil.NoSuchProcess, psutil.AccessDenied, AttributeError, OSError):
+                            # Skip problematic connections silently
+                            continue
+                            
+            except (psutil.AccessDenied, OSError) as e:
+                logger.warning(f"Access denied to network connections via psutil: {e}")
+                # Fallback to system command
+                connections = self._get_ports_fallback()
             
-            # Sort by port number
-            connections.sort(key=lambda x: int(x['local_address'].split(':')[-1]) if ':' in x['local_address'] and x['local_address'] != 'N/A' else 0)
+            # Sort by port number with better error handling
+            def safe_sort_key(conn):
+                try:
+                    local_addr = conn.get('local_address', 'N/A')
+                    if local_addr != 'N/A' and ':' in local_addr:
+                        return int(local_addr.split(':')[-1])
+                    return 0
+                except (ValueError, IndexError):
+                    return 0
+            
+            connections.sort(key=safe_sort_key)
             return connections
             
         except Exception as e:
             logger.error(f"Error getting active ports: {e}")
+            return []
+    
+    def _get_ports_fallback(self) -> List[Dict[str, Any]]:
+        """Fallback method to get port information using system commands."""
+        try:
+            connections = []
+            
+            # Try netstat command
+            try:
+                result = subprocess.run(['netstat', '-tuln'], 
+                                      capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    lines = result.stdout.split('\n')
+                    for line in lines:
+                        if 'LISTEN' in line:
+                            parts = line.split()
+                            if len(parts) >= 4:
+                                local_addr = parts[3]
+                                status = parts[5] if len(parts) > 5 else 'LISTEN'
+                                connections.append({
+                                    'pid': 'N/A',
+                                    'local_address': local_addr,
+                                    'remote_address': 'N/A',
+                                    'status': status,
+                                    'family': 'IPv4' if ':' in local_addr else 'IPv6'
+                                })
+            except (subprocess.TimeoutExpired, FileNotFoundError):
+                pass
+            
+            # Try lsof command (macOS/Linux)
+            try:
+                result = subprocess.run(['lsof', '-i', '-P', '-n'], 
+                                      capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    lines = result.stdout.split('\n')
+                    for line in lines[1:]:  # Skip header
+                        if 'LISTEN' in line:
+                            parts = line.split()
+                            if len(parts) >= 9:
+                                pid = parts[1]
+                                local_addr = parts[8]
+                                connections.append({
+                                    'pid': pid,
+                                    'local_address': local_addr,
+                                    'remote_address': 'N/A',
+                                    'status': 'LISTEN',
+                                    'family': 'IPv4' if ':' in local_addr else 'IPv6'
+                                })
+            except (subprocess.TimeoutExpired, FileNotFoundError):
+                pass
+            
+            return connections
+            
+        except Exception as e:
+            logger.warning(f"Fallback port detection failed: {e}")
             return []
     
     def check_mysql_status(self) -> Dict[str, Any]:
@@ -183,10 +275,10 @@ class SystemMonitor:
         return {
             'timestamp': datetime.now().isoformat(),
             'system_info': self.get_system_info(),
-            'running_services': self.get_running_services(),
-            'active_ports': self.get_active_ports(),
-            'mysql_status': self.check_mysql_status(),
-            'postgresql_status': self.check_postgresql_status(),
+            'services': self.get_running_services(),
+            'ports': self.get_active_ports(),
+            'mysql': self.check_mysql_status(),
+            'postgresql': self.check_postgresql_status(),
             'monitor_uptime': str(datetime.now() - self.start_time)
         }
 

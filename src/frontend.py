@@ -46,7 +46,10 @@ def update_monitoring_data():
                 latest_data = new_data
         except Exception as e:
             print(f"Error updating monitoring data: {e}")
-        time.sleep(5)  # Update every 5 seconds
+        
+        # Get refresh interval from config, default to 5 seconds
+        refresh_interval = config_manager.get('monitoring.refresh_interval', 5)
+        time.sleep(refresh_interval)
 
 @app.route('/')
 def index():

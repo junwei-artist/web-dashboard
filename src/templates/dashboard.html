@@ -133,9 +133,9 @@ function refreshData() {
         .then(response => response.json())
         .then(data => {
             updateSystemInfo(data.system_info);
-            updateDatabaseStatus(data.mysql_status, data.postgresql_status);
-            updateTopServices(data.running_services);
-            updateActivePorts(data.active_ports);
+            updateDatabaseStatus(data.mysql, data.postgresql);
+            updateTopServices(data.services);
+            updateActivePorts(data.ports);
             updateLastUpdated(data.timestamp);
         })
         .catch(error => {
