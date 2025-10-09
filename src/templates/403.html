@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block title %}Access Denied{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <div class="card border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h4 class="mb-0"><i class="fas fa-ban"></i> Access Denied</h4>
+                </div>
+                <div class="card-body text-center">
+                    <div class="mb-4">
+                        <i class="fas fa-shield-alt fa-5x text-danger"></i>
+                    </div>
+                    
+                    <h5 class="text-danger mb-3">403 - Forbidden</h5>
+                    
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Access Restricted</strong><br>
+                        Your IP address is not authorized to access this dashboard.
+                    </div>
+                    
+                    <div class="mb-3">
+                        <p><strong>Your IP Address:</strong> <code>{{ client_ip }}</code></p>
+                        {% if error_message %}
+                        <p><strong>Reason:</strong> {{ error_message }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Need Access?</strong><br>
+                        Contact your system administrator to add your IP address to the allowed list.
+                    </div>
+                    
+                    <div class="mt-4">
+                        <button class="btn btn-outline-primary" onclick="window.location.reload()">
+                            <i class="fas fa-sync-alt"></i> Try Again
+                        </button>
+                        <button class="btn btn-outline-secondary" onclick="history.back()">
+                            <i class="fas fa-arrow-left"></i> Go Back
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Additional Information -->
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h6><i class="fas fa-question-circle"></i> Troubleshooting</h6>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled">
+                        <li><i class="fas fa-check text-success"></i> Verify you're connecting from an authorized network</li>
+                        <li><i class="fas fa-check text-success"></i> Check if your IP address has been added to the allowed list</li>
+                        <li><i class="fas fa-check text-success"></i> Ensure you're not behind a proxy that changes your IP</li>
+                        <li><i class="fas fa-check text-success"></i> Contact your administrator if you believe this is an error</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

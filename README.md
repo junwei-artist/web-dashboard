@@ -11,6 +11,8 @@ A comprehensive web application for monitoring system services, active ports, an
 - **Modern Web Interface**: Responsive design with Bootstrap and Font Awesome icons
 - **Auto-refresh**: Real-time updates every 5 seconds
 - **RESTful API**: JSON endpoints for programmatic access
+- **🔒 IP Access Control**: Restrict dashboard access to specific IP addresses or networks
+- **⚙️ Configuration Management**: Web-based configuration interface for security settings
 
 ## Project Structure
 
@@ -20,6 +22,7 @@ web_dashboard/
 │   ├── __init__.py        # Package initialization
 │   ├── backend.py         # Core monitoring logic
 │   ├── frontend.py        # Flask web application
+│   ├── config_manager.py  # Configuration management
 │   ├── templates/         # HTML templates
 │   │   ├── base.html     # Base template with navigation
 │   │   ├── dashboard.html # Main dashboard page
@@ -27,6 +30,8 @@ web_dashboard/
 │   │   ├── ports.html    # Ports monitoring page
 │   │   ├── databases.html # Database status page
 │   │   ├── system.html   # System information page
+│   │   ├── config.html   # Configuration management page
+│   │   ├── 403.html      # Access denied page
 │   │   ├── 404.html      # 404 error page
 │   │   └── 500.html      # 500 error page
 │   └── static/           # Static assets (CSS, JS)
@@ -34,6 +39,7 @@ web_dashboard/
 │       └── js/
 ├── main.py               # Main entry point
 ├── test_backend.py       # Backend testing script
+├── config.json           # Configuration file
 ├── install.command       # macOS/Linux installation script
 ├── install.bat           # Windows installation script
 ├── start_dashboard.command # macOS/Linux launcher script
@@ -226,11 +232,72 @@ The application provides several REST API endpoints:
 - Font Awesome 6.0.0 for icons
 - Auto-refresh functionality
 
-## Security Notes
+## Security & IP Access Control
 
-- The application runs on `0.0.0.0:9100` by default
-- No authentication is implemented (suitable for local monitoring)
-- Process information may require appropriate system permissions
+### IP Restriction Configuration
+
+The dashboard includes built-in IP access control to restrict remote access to authorized networks only.
+
+#### Configuration File (`config.json`)
+
+```json
+{
+  "security": {
+    "enable_ip_restriction": true,
+    "allowed_ips": [
+      "127.0.0.1",
+      "::1", 
+      "localhost",
+      "192.168.1.0/24",
+      "10.0.0.0/8"
+    ],
+    "blocked_ips": [],
+    "log_access_attempts": true
+  }
+}
+```
+
+#### Supported IP Formats
+
+- **Single IP**: `192.168.1.100`
+- **CIDR Blocks**: `192.168.1.0/24` (entire subnet)
+- **Localhost**: `localhost`, `127.0.0.1`, `::1`
+- **IPv6**: `2001:db8::1`
+
+#### Web Configuration Interface
+
+Access the configuration page at `/config` to:
+- ✅ Enable/disable IP restriction
+- ✅ Add/remove allowed IP addresses
+- ✅ View current security settings
+- ✅ Reload configuration without restart
+
+#### Command Line Configuration
+
+```bash
+# Enable IP restriction
+curl -X POST http://localhost:9100/api/config/ip-restriction \
+  -H "Content-Type: application/json" \
+  -d '{"enable": true}'
+
+# Add allowed IP
+curl -X POST http://localhost:9100/api/config/allowed-ips \
+  -H "Content-Type: application/json" \
+  -d '{"ip": "192.168.1.0/24"}'
+
+# Remove allowed IP
+curl -X DELETE http://localhost:9100/api/config/allowed-ips \
+  -H "Content-Type: application/json" \
+  -d '{"ip": "192.168.1.100"}'
+```
+
+### Security Notes
+
+- **Default**: IP restriction is **DISABLED** by default (all IPs allowed)
+- **Production**: Enable IP restriction for production deployments
+- **Logging**: Access attempts are logged when enabled
+- **Authentication**: No user authentication (IP-based access control only)
+- **Process Info**: May require appropriate system permissions
 
 ## Troubleshooting
 

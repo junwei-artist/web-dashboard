@@ -4,8 +4,9 @@ Frontend web application for system monitoring dashboard.
 Provides web interface for monitoring services, ports, and databases.
 """
 
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, abort
 from .backend import SystemMonitor
+from .config_manager import ConfigManager
 import json
 import threading
 import time
@@ -13,10 +14,27 @@ from datetime import datetime
 
 app = Flask(__name__)
 monitor = SystemMonitor()
+config_manager = ConfigManager()
 
 # Global variable to store latest monitoring data
 latest_data = {}
 data_lock = threading.Lock()
+
+def check_ip_access():
+    """Check if client IP is allowed to access the dashboard."""
+    client_ip = request.environ.get('HTTP_X_FORWARDED_FOR', request.environ.get('REMOTE_ADDR'))
+    
+    # Handle forwarded IPs (take the first one)
+    if ',' in client_ip:
+        client_ip = client_ip.split(',')[0].strip()
+    
+    if not config_manager.is_ip_allowed(client_ip):
+        abort(403, description=f"Access denied for IP: {client_ip}")
+
+@app.before_request
+def before_request():
+    """Check IP access before processing any request."""
+    check_ip_access()
 
 def update_monitoring_data():
     """Background thread to continuously update monitoring data."""
@@ -90,6 +108,74 @@ def databases_page():
 def system_page():
     """System information page."""
     return render_template('system.html')
+
+@app.route('/config')
+def config_page():
+    """Configuration management page."""
+    return render_template('config.html')
+
+@app.route('/api/config')
+def get_config():
+    """API endpoint to get current configuration."""
+    return jsonify({
+        'security': config_manager.get_security_config(),
+        'server': config_manager.get_server_config(),
+        'monitoring': config_manager.get_monitoring_config()
+    })
+
+@app.route('/api/config/allowed-ips', methods=['GET', 'POST', 'DELETE'])
+def manage_allowed_ips():
+    """API endpoint to manage allowed IPs."""
+    if request.method == 'GET':
+        return jsonify({'allowed_ips': config_manager.list_allowed_ips()})
+    
+    elif request.method == 'POST':
+        data = request.get_json()
+        ip = data.get('ip')
+        if not ip:
+            return jsonify({'error': 'IP address required'}), 400
+        
+        if config_manager.add_allowed_ip(ip):
+            return jsonify({'message': f'Added IP: {ip}'})
+        else:
+            return jsonify({'error': f'Invalid IP format: {ip}'}), 400
+    
+    elif request.method == 'DELETE':
+        data = request.get_json()
+        ip = data.get('ip')
+        if not ip:
+            return jsonify({'error': 'IP address required'}), 400
+        
+        if config_manager.remove_allowed_ip(ip):
+            return jsonify({'message': f'Removed IP: {ip}'})
+        else:
+            return jsonify({'error': f'IP not found: {ip}'}), 404
+
+@app.route('/api/config/ip-restriction', methods=['POST'])
+def toggle_ip_restriction():
+    """API endpoint to enable/disable IP restriction."""
+    data = request.get_json()
+    enable = data.get('enable', True)
+    
+    if enable:
+        config_manager.enable_ip_restriction()
+        return jsonify({'message': 'IP restriction enabled'})
+    else:
+        config_manager.disable_ip_restriction()
+        return jsonify({'message': 'IP restriction disabled'})
+
+@app.route('/api/config/reload', methods=['POST'])
+def reload_config():
+    """API endpoint to reload configuration."""
+    config_manager.reload_config()
+    return jsonify({'message': 'Configuration reloaded'})
+
+@app.errorhandler(403)
+def forbidden(error):
+    """Handle 403 (Forbidden) errors."""
+    return render_template('403.html', 
+                         error_message=error.description,
+                         client_ip=request.environ.get('REMOTE_ADDR')), 403
 
 @app.errorhandler(404)
 def not_found(error):

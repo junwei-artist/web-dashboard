@@ -1,0 +1,366 @@
+{% extends "base.html" %}
+
+{% block title %}Configuration Management{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1><i class="fas fa-cog"></i> Configuration Management</h1>
+                <button class="btn btn-outline-primary" onclick="reloadConfig()">
+                    <i class="fas fa-sync-alt"></i> Reload Config
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Security Configuration -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-shield-alt"></i> Security Settings</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" id="ipRestrictionToggle" 
+                                       onchange="toggleIPRestriction()">
+                                <label class="form-check-label" for="ipRestrictionToggle">
+                                    Enable IP Restriction
+                                </label>
+                            </div>
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" id="logAccessToggle" checked>
+                                <label class="form-check-label" for="logAccessToggle">
+                                    Log Access Attempts
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle"></i>
+                                <strong>IP Restriction:</strong> When enabled, only IPs in the allowed list can access the dashboard.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Allowed IPs Management -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-list"></i> Allowed IP Addresses</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-8">
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="newIP" 
+                                       placeholder="Enter IP address or CIDR block (e.g., 192.168.1.0/24)">
+                                <button class="btn btn-success" onclick="addAllowedIP()">
+                                    <i class="fas fa-plus"></i> Add IP
+                                </button>
+                            </div>
+                            <small class="form-text text-muted">
+                                Supports single IPs (192.168.1.100) and CIDR blocks (192.168.1.0/24)
+                            </small>
+                        </div>
+                    </div>
+                    
+                    <div class="table-responsive">
+                        <table class="table table-striped" id="allowedIPsTable">
+                            <thead>
+                                <tr>
+                                    <th>IP Address / CIDR Block</th>
+                                    <th>Type</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="allowedIPsBody">
+                                <!-- Dynamically populated -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Server Configuration -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-server"></i> Server Configuration</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="serverHost" class="form-label">Host</label>
+                                <input type="text" class="form-control" id="serverHost" value="0.0.0.0" readonly>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="serverPort" class="form-label">Port</label>
+                                <input type="number" class="form-control" id="serverPort" value="9100" readonly>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="debugMode" checked disabled>
+                                    <label class="form-check-label" for="debugMode">
+                                        Debug Mode
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Monitoring Configuration -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-chart-line"></i> Monitoring Configuration</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="refreshInterval" class="form-label">Refresh Interval (seconds)</label>
+                                <input type="number" class="form-control" id="refreshInterval" value="5" readonly>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="maxProcesses" class="form-label">Max Processes</label>
+                                <input type="number" class="form-control" id="maxProcesses" value="100" readonly>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="databaseMonitoring" checked disabled>
+                                    <label class="form-check-label" for="databaseMonitoring">
+                                        Database Monitoring
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Access Log -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-history"></i> Recent Access Log</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        Access logging is enabled. Check the server logs for detailed access information.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentConfig = {};
+
+// Load configuration on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadConfiguration();
+});
+
+function loadConfiguration() {
+    fetch('/api/config')
+        .then(response => response.json())
+        .then(data => {
+            currentConfig = data;
+            updateUI();
+        })
+        .catch(error => {
+            console.error('Error loading configuration:', error);
+            showAlert('Error loading configuration', 'danger');
+        });
+}
+
+function updateUI() {
+    // Update security settings
+    document.getElementById('ipRestrictionToggle').checked = currentConfig.security.enable_ip_restriction;
+    document.getElementById('logAccessToggle').checked = currentConfig.security.log_access_attempts;
+    
+    // Update server settings
+    document.getElementById('serverHost').value = currentConfig.server.host;
+    document.getElementById('serverPort').value = currentConfig.server.port;
+    document.getElementById('debugMode').checked = currentConfig.server.debug;
+    
+    // Update monitoring settings
+    document.getElementById('refreshInterval').value = currentConfig.monitoring.refresh_interval;
+    document.getElementById('maxProcesses').value = currentConfig.monitoring.max_processes;
+    document.getElementById('databaseMonitoring').checked = currentConfig.monitoring.enable_database_monitoring;
+    
+    // Update allowed IPs table
+    updateAllowedIPsTable();
+}
+
+function updateAllowedIPsTable() {
+    const tbody = document.getElementById('allowedIPsBody');
+    tbody.innerHTML = '';
+    
+    currentConfig.security.allowed_ips.forEach(ip => {
+        const row = document.createElement('tr');
+        const type = ip.includes('/') ? 'CIDR Block' : 'Single IP';
+        
+        row.innerHTML = `
+            <td><code>${ip}</code></td>
+            <td><span class="badge bg-${type === 'CIDR Block' ? 'info' : 'primary'}">${type}</span></td>
+            <td>
+                <button class="btn btn-sm btn-outline-danger" onclick="removeAllowedIP('${ip}')">
+                    <i class="fas fa-trash"></i> Remove
+                </button>
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+function addAllowedIP() {
+    const ipInput = document.getElementById('newIP');
+    const ip = ipInput.value.trim();
+    
+    if (!ip) {
+        showAlert('Please enter an IP address', 'warning');
+        return;
+    }
+    
+    fetch('/api/config/allowed-ips', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ ip: ip })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            showAlert(data.error, 'danger');
+        } else {
+            showAlert(data.message, 'success');
+            ipInput.value = '';
+            loadConfiguration();
+        }
+    })
+    .catch(error => {
+        console.error('Error adding IP:', error);
+        showAlert('Error adding IP address', 'danger');
+    });
+}
+
+function removeAllowedIP(ip) {
+    if (!confirm(`Are you sure you want to remove IP: ${ip}?`)) {
+        return;
+    }
+    
+    fetch('/api/config/allowed-ips', {
+        method: 'DELETE',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ ip: ip })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            showAlert(data.error, 'danger');
+        } else {
+            showAlert(data.message, 'success');
+            loadConfiguration();
+        }
+    })
+    .catch(error => {
+        console.error('Error removing IP:', error);
+        showAlert('Error removing IP address', 'danger');
+    });
+}
+
+function toggleIPRestriction() {
+    const enabled = document.getElementById('ipRestrictionToggle').checked;
+    
+    fetch('/api/config/ip-restriction', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ enable: enabled })
+    })
+    .then(response => response.json())
+    .then(data => {
+        showAlert(data.message, 'success');
+        loadConfiguration();
+    })
+    .catch(error => {
+        console.error('Error toggling IP restriction:', error);
+        showAlert('Error updating IP restriction', 'danger');
+        // Revert the toggle
+        document.getElementById('ipRestrictionToggle').checked = !enabled;
+    });
+}
+
+function reloadConfig() {
+    fetch('/api/config/reload', {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        showAlert(data.message, 'success');
+        loadConfiguration();
+    })
+    .catch(error => {
+        console.error('Error reloading config:', error);
+        showAlert('Error reloading configuration', 'danger');
+    });
+}
+
+function showAlert(message, type) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    // Insert at the top of the page
+    const container = document.querySelector('.container-fluid');
+    container.insertBefore(alertDiv, container.firstChild);
+    
+    // Auto-dismiss after 5 seconds
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 5000);
+}
+</script>
+{% endblock %}

@@ -209,6 +209,7 @@ main() {
     echo "   ├── src/           # Source code"
     echo "   ├── venv/          # Virtual environment"
     echo "   ├── templates/     # Web templates"
+    echo "   ├── config.json    # Configuration file"
     echo "   ├── requirements.txt"
     echo "   ├── setup.py"
     echo "   ├── install.command"
