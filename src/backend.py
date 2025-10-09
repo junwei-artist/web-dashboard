@@ -714,6 +714,183 @@ class SystemMonitor:
         history.sort(key=lambda x: x['timestamp'], reverse=True)
         return history[:limit]
     
+    def check_proxy_environment_variables(self) -> Dict[str, Any]:
+        """Check for proxy environment variables."""
+        import os
+        proxy_vars = {
+            'HTTP_PROXY': os.environ.get('HTTP_PROXY'),
+            'HTTPS_PROXY': os.environ.get('HTTPS_PROXY'), 
+            'http_proxy': os.environ.get('http_proxy'),
+            'https_proxy': os.environ.get('https_proxy'),
+            'NO_PROXY': os.environ.get('NO_PROXY'),
+            'no_proxy': os.environ.get('no_proxy'),
+            'ALL_PROXY': os.environ.get('ALL_PROXY'),
+            'all_proxy': os.environ.get('all_proxy')
+        }
+        
+        active_proxies = {k: v for k, v in proxy_vars.items() if v}
+        return {
+            'has_proxy_env_vars': len(active_proxies) > 0,
+            'proxy_variables': active_proxies,
+            'total_proxy_vars': len(active_proxies)
+        }
+    
+    def check_network_routes(self) -> Dict[str, Any]:
+        """Check network routes for proxy indicators."""
+        try:
+            import subprocess
+            result = subprocess.run(['netstat', '-rn'], capture_output=True, text=True, timeout=10)
+            routes = result.stdout
+            
+            # Look for proxy-related routes and patterns
+            proxy_indicators = []
+            suspicious_routes = []
+            
+            lines = routes.split('\n')
+            for line in lines:
+                line_lower = line.lower()
+                if any(keyword in line_lower for keyword in ['proxy', 'tunnel', 'vpn', 'tor']):
+                    proxy_indicators.append(line.strip())
+                # Check for unusual routing patterns
+                if '0.0.0.0' in line and len(line.split()) > 2:
+                    parts = line.split()
+                    if len(parts) >= 3:
+                        gateway = parts[1] if len(parts) > 1 else ''
+                        if gateway not in ['0.0.0.0', '127.0.0.1', 'localhost'] and gateway != '':
+                            suspicious_routes.append(line.strip())
+            
+            return {
+                'has_proxy_routes': len(proxy_indicators) > 0,
+                'has_suspicious_routes': len(suspicious_routes) > 0,
+                'proxy_indicators': proxy_indicators,
+                'suspicious_routes': suspicious_routes[:10],  # Limit to first 10
+                'total_routes_checked': len(lines)
+            }
+        except Exception as e:
+            logger.error(f"Error checking network routes: {e}")
+            return {'error': str(e), 'has_proxy_routes': False}
+    
+    def check_dns_servers(self) -> Dict[str, Any]:
+        """Check DNS server configuration for proxy indicators."""
+        try:
+            import subprocess
+            import re
+            
+            # Check /etc/resolv.conf (Linux/macOS)
+            dns_servers = []
+            try:
+                with open('/etc/resolv.conf', 'r') as f:
+                    content = f.read()
+                    dns_matches = re.findall(r'nameserver\s+(\S+)', content)
+                    dns_servers.extend(dns_matches)
+            except FileNotFoundError:
+                pass
+            
+            # Check system DNS configuration (macOS)
+            try:
+                result = subprocess.run(['scutil', '--dns'], capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    dns_matches = re.findall(r'nameserver\[\d+\]\s*:\s*(\S+)', result.stdout)
+                    dns_servers.extend(dns_matches)
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                pass
+            
+            # Remove duplicates and check for suspicious DNS servers
+            dns_servers = list(set(dns_servers))
+            suspicious_dns = []
+            
+            # Common proxy/VPN DNS servers
+            proxy_dns_patterns = [
+                '1.1.1.1', '1.0.0.1',  # Cloudflare
+                '8.8.8.8', '8.8.4.4',  # Google
+                '208.67.222.222', '208.67.220.220',  # OpenDNS
+            ]
+            
+            for dns in dns_servers:
+                if dns in proxy_dns_patterns:
+                    suspicious_dns.append(dns)
+            
+            return {
+                'dns_servers': dns_servers,
+                'has_suspicious_dns': len(suspicious_dns) > 0,
+                'suspicious_dns_servers': suspicious_dns,
+                'total_dns_servers': len(dns_servers)
+            }
+        except Exception as e:
+            logger.error(f"Error checking DNS servers: {e}")
+            return {'error': str(e), 'dns_servers': []}
+    
+    def check_proxy_usage(self) -> Dict[str, Any]:
+        """Comprehensive proxy detection check."""
+        try:
+            # Get existing proxy-related data
+            active_ports = self.get_active_ports()
+            running_services = self.get_running_services()
+            
+            # Filter for proxy-related items
+            proxy_ports = [port for port in active_ports 
+                          if 'proxy' in port.get('port_label', '').lower() or 
+                             'vpn' in port.get('port_label', '').lower()]
+            
+            proxy_processes = [service for service in running_services
+                             if any(keyword in service.get('name', '').lower() 
+                                   for keyword in ['proxy', 'vpn', 'clash', 'shadowsocks', 'v2ray'])]
+            
+            # Get enhanced detection data
+            env_vars = self.check_proxy_environment_variables()
+            network_routes = self.check_network_routes()
+            dns_servers = self.check_dns_servers()
+            
+            # Calculate risk score
+            risk_factors = 0
+            if env_vars.get('has_proxy_env_vars', False):
+                risk_factors += 2
+            if network_routes.get('has_proxy_routes', False):
+                risk_factors += 3
+            if network_routes.get('has_suspicious_routes', False):
+                risk_factors += 1
+            if dns_servers.get('has_suspicious_dns', False):
+                risk_factors += 1
+            if len(proxy_ports) > 0:
+                risk_factors += 2
+            if len(proxy_processes) > 0:
+                risk_factors += 3
+            
+            # Determine risk level
+            if risk_factors >= 6:
+                risk_level = "HIGH"
+            elif risk_factors >= 3:
+                risk_level = "MEDIUM"
+            elif risk_factors >= 1:
+                risk_level = "LOW"
+            else:
+                risk_level = "NONE"
+            
+            return {
+                'timestamp': datetime.now().isoformat(),
+                'risk_level': risk_level,
+                'risk_score': risk_factors,
+                'proxy_ports': proxy_ports,
+                'proxy_processes': proxy_processes,
+                'environment_variables': env_vars,
+                'network_routes': network_routes,
+                'dns_servers': dns_servers,
+                'summary': {
+                    'total_proxy_ports': len(proxy_ports),
+                    'total_proxy_processes': len(proxy_processes),
+                    'has_env_proxy_vars': env_vars.get('has_proxy_env_vars', False),
+                    'has_proxy_routes': network_routes.get('has_proxy_routes', False),
+                    'has_suspicious_dns': dns_servers.get('has_suspicious_dns', False)
+                }
+            }
+        except Exception as e:
+            logger.error(f"Error in comprehensive proxy check: {e}")
+            return {
+                'error': str(e),
+                'timestamp': datetime.now().isoformat(),
+                'risk_level': 'UNKNOWN'
+            }
+
     def get_all_monitoring_data(self) -> Dict[str, Any]:
         """Get all monitoring data in one call."""
         return {

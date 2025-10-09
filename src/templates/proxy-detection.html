@@ -1,0 +1,444 @@
+{% extends "base.html" %}
+
+{% block title %}Enhanced Proxy Detection{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1><i class="fas fa-search text-primary"></i> Enhanced Proxy Detection</h1>
+                <button class="btn btn-primary" onclick="refreshProxyData()">
+                    <i class="fas fa-sync-alt"></i> Refresh
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Risk Assessment Card -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-shield-alt"></i> Risk Assessment</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <div id="riskLevel" class="display-4 mb-2">-</div>
+                                <div class="text-muted">Risk Level</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <div id="riskScore" class="display-4 mb-2">-</div>
+                                <div class="text-muted">Risk Score</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <div id="proxyPorts" class="display-4 mb-2">-</div>
+                                <div class="text-muted">Proxy Ports</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <div id="proxyProcesses" class="display-4 mb-2">-</div>
+                                <div class="text-muted">Proxy Processes</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detection Results -->
+    <div class="row">
+        <!-- Environment Variables -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-cog"></i> Environment Variables</h5>
+                </div>
+                <div class="card-body">
+                    <div id="envVarsStatus" class="mb-3">
+                        <span class="badge bg-secondary">Loading...</span>
+                    </div>
+                    <div id="envVarsList" class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Variable</th>
+                                    <th>Value</th>
+                                </tr>
+                            </thead>
+                            <tbody id="envVarsTableBody">
+                                <tr><td colspan="2" class="text-center">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Network Routes -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-route"></i> Network Routes</h5>
+                </div>
+                <div class="card-body">
+                    <div id="routesStatus" class="mb-3">
+                        <span class="badge bg-secondary">Loading...</span>
+                    </div>
+                    <div id="routesList">
+                        <div id="proxyRoutes" class="mb-3" style="display: none;">
+                            <h6>Proxy-Related Routes:</h6>
+                            <ul id="proxyRoutesList" class="list-unstyled"></ul>
+                        </div>
+                        <div id="suspiciousRoutes" class="mb-3" style="display: none;">
+                            <h6>Suspicious Routes:</h6>
+                            <ul id="suspiciousRoutesList" class="list-unstyled"></ul>
+                        </div>
+                        <div id="noRoutes" class="text-muted">
+                            No suspicious routes detected.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- DNS Servers -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-globe"></i> DNS Servers</h5>
+                </div>
+                <div class="card-body">
+                    <div id="dnsStatus" class="mb-3">
+                        <span class="badge bg-secondary">Loading...</span>
+                    </div>
+                    <div id="dnsList">
+                        <div id="dnsServers" class="mb-3">
+                            <h6>Configured DNS Servers:</h6>
+                            <ul id="dnsServersList" class="list-unstyled"></ul>
+                        </div>
+                        <div id="suspiciousDns" class="mb-3" style="display: none;">
+                            <h6>Suspicious DNS Servers:</h6>
+                            <ul id="suspiciousDnsList" class="list-unstyled"></ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Active Proxy Ports -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-plug"></i> Active Proxy Ports</h5>
+                </div>
+                <div class="card-body">
+                    <div id="proxyPortsStatus" class="mb-3">
+                        <span class="badge bg-secondary">Loading...</span>
+                    </div>
+                    <div id="proxyPortsList" class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Port</th>
+                                    <th>Label</th>
+                                    <th>Process</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="proxyPortsTableBody">
+                                <tr><td colspan="4" class="text-center">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Proxy Processes -->
+        <div class="col-md-12 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-microchip"></i> Proxy Processes</h5>
+                </div>
+                <div class="card-body">
+                    <div id="proxyProcessesStatus" class="mb-3">
+                        <span class="badge bg-secondary">Loading...</span>
+                    </div>
+                    <div id="proxyProcessesList" class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>PID</th>
+                                    <th>Process Name</th>
+                                    <th>CPU %</th>
+                                    <th>Memory %</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="proxyProcessesTableBody">
+                                <tr><td colspan="5" class="text-center">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Last Updated -->
+    <div class="row">
+        <div class="col-12">
+            <div class="text-muted text-center">
+                <small>Last updated: <span id="lastUpdated">-</span></small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let proxyData = {};
+
+function getRiskLevelClass(level) {
+    switch(level) {
+        case 'HIGH': return 'text-danger';
+        case 'MEDIUM': return 'text-warning';
+        case 'LOW': return 'text-info';
+        case 'NONE': return 'text-success';
+        default: return 'text-secondary';
+    }
+}
+
+function getBadgeClass(hasIssue) {
+    return hasIssue ? 'bg-danger' : 'bg-success';
+}
+
+function formatTimestamp(timestamp) {
+    if (!timestamp) return '-';
+    return new Date(timestamp).toLocaleString();
+}
+
+function updateRiskAssessment(data) {
+    const riskLevel = document.getElementById('riskLevel');
+    const riskScore = document.getElementById('riskScore');
+    const proxyPorts = document.getElementById('proxyPorts');
+    const proxyProcesses = document.getElementById('proxyProcesses');
+
+    riskLevel.textContent = data.risk_level || '-';
+    riskLevel.className = `display-4 mb-2 ${getRiskLevelClass(data.risk_level)}`;
+    
+    riskScore.textContent = data.risk_score || 0;
+    proxyPorts.textContent = data.summary?.total_proxy_ports || 0;
+    proxyProcesses.textContent = data.summary?.total_proxy_processes || 0;
+}
+
+function updateEnvironmentVariables(data) {
+    const status = document.getElementById('envVarsStatus');
+    const tbody = document.getElementById('envVarsTableBody');
+    
+    const envVars = data.environment_variables || {};
+    const hasVars = envVars.has_proxy_env_vars || false;
+    
+    status.innerHTML = `<span class="badge ${getBadgeClass(hasVars)}">${hasVars ? 'Proxy variables detected' : 'No proxy variables'}</span>`;
+    
+    if (hasVars && envVars.proxy_variables) {
+        tbody.innerHTML = '';
+        Object.entries(envVars.proxy_variables).forEach(([key, value]) => {
+            const row = tbody.insertRow();
+            row.insertCell(0).textContent = key;
+            row.insertCell(1).textContent = value;
+        });
+    } else {
+        tbody.innerHTML = '<tr><td colspan="2" class="text-center text-muted">No proxy environment variables found</td></tr>';
+    }
+}
+
+function updateNetworkRoutes(data) {
+    const status = document.getElementById('routesStatus');
+    const proxyRoutesDiv = document.getElementById('proxyRoutes');
+    const suspiciousRoutesDiv = document.getElementById('suspiciousRoutes');
+    const noRoutesDiv = document.getElementById('noRoutes');
+    const proxyRoutesList = document.getElementById('proxyRoutesList');
+    const suspiciousRoutesList = document.getElementById('suspiciousRoutesList');
+    
+    const routes = data.network_routes || {};
+    const hasProxyRoutes = routes.has_proxy_routes || false;
+    const hasSuspiciousRoutes = routes.has_suspicious_routes || false;
+    
+    status.innerHTML = `<span class="badge ${getBadgeClass(hasProxyRoutes || hasSuspiciousRoutes)}">${(hasProxyRoutes || hasSuspiciousRoutes) ? 'Suspicious routes detected' : 'No suspicious routes'}</span>`;
+    
+    if (hasProxyRoutes && routes.proxy_indicators) {
+        proxyRoutesDiv.style.display = 'block';
+        proxyRoutesList.innerHTML = '';
+        routes.proxy_indicators.forEach(route => {
+            const li = document.createElement('li');
+            li.className = 'text-danger';
+            li.textContent = route;
+            proxyRoutesList.appendChild(li);
+        });
+    } else {
+        proxyRoutesDiv.style.display = 'none';
+    }
+    
+    if (hasSuspiciousRoutes && routes.suspicious_routes) {
+        suspiciousRoutesDiv.style.display = 'block';
+        suspiciousRoutesList.innerHTML = '';
+        routes.suspicious_routes.forEach(route => {
+            const li = document.createElement('li');
+            li.className = 'text-warning';
+            li.textContent = route;
+            suspiciousRoutesList.appendChild(li);
+        });
+    } else {
+        suspiciousRoutesDiv.style.display = 'none';
+    }
+    
+    if (!hasProxyRoutes && !hasSuspiciousRoutes) {
+        noRoutesDiv.style.display = 'block';
+    } else {
+        noRoutesDiv.style.display = 'none';
+    }
+}
+
+function updateDnsServers(data) {
+    const status = document.getElementById('dnsStatus');
+    const dnsServersList = document.getElementById('dnsServersList');
+    const suspiciousDnsDiv = document.getElementById('suspiciousDns');
+    const suspiciousDnsList = document.getElementById('suspiciousDnsList');
+    
+    const dns = data.dns_servers || {};
+    const hasSuspiciousDns = dns.has_suspicious_dns || false;
+    
+    status.innerHTML = `<span class="badge ${getBadgeClass(hasSuspiciousDns)}">${hasSuspiciousDns ? 'Suspicious DNS detected' : 'Normal DNS configuration'}</span>`;
+    
+    if (dns.dns_servers && dns.dns_servers.length > 0) {
+        dnsServersList.innerHTML = '';
+        dns.dns_servers.forEach(server => {
+            const li = document.createElement('li');
+            li.textContent = server;
+            dnsServersList.appendChild(li);
+        });
+    } else {
+        dnsServersList.innerHTML = '<li class="text-muted">No DNS servers found</li>';
+    }
+    
+    if (hasSuspiciousDns && dns.suspicious_dns_servers) {
+        suspiciousDnsDiv.style.display = 'block';
+        suspiciousDnsList.innerHTML = '';
+        dns.suspicious_dns_servers.forEach(server => {
+            const li = document.createElement('li');
+            li.className = 'text-warning';
+            li.textContent = server;
+            suspiciousDnsList.appendChild(li);
+        });
+    } else {
+        suspiciousDnsDiv.style.display = 'none';
+    }
+}
+
+function updateProxyPorts(data) {
+    const status = document.getElementById('proxyPortsStatus');
+    const tbody = document.getElementById('proxyPortsTableBody');
+    
+    const ports = data.proxy_ports || [];
+    const hasPorts = ports.length > 0;
+    
+    status.innerHTML = `<span class="badge ${getBadgeClass(hasPorts)}">${hasPorts ? `${ports.length} proxy ports detected` : 'No proxy ports'}</span>`;
+    
+    if (hasPorts) {
+        tbody.innerHTML = '';
+        ports.forEach(port => {
+            const row = tbody.insertRow();
+            row.insertCell(0).textContent = port.local_address || '-';
+            row.insertCell(1).textContent = port.port_label || '-';
+            row.insertCell(2).textContent = port.process_name || '-';
+            row.insertCell(3).textContent = port.status || '-';
+        });
+    } else {
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No proxy ports detected</td></tr>';
+    }
+}
+
+function updateProxyProcesses(data) {
+    const status = document.getElementById('proxyProcessesStatus');
+    const tbody = document.getElementById('proxyProcessesTableBody');
+    
+    const processes = data.proxy_processes || [];
+    const hasProcesses = processes.length > 0;
+    
+    status.innerHTML = `<span class="badge ${getBadgeClass(hasProcesses)}">${hasProcesses ? `${processes.length} proxy processes detected` : 'No proxy processes'}</span>`;
+    
+    if (hasProcesses) {
+        tbody.innerHTML = '';
+        processes.forEach(process => {
+            const row = tbody.insertRow();
+            row.insertCell(0).textContent = process.pid || '-';
+            row.insertCell(1).textContent = process.name || '-';
+            row.insertCell(2).textContent = `${process.cpu_percent || 0}%`;
+            row.insertCell(3).textContent = `${process.memory_percent || 0}%`;
+            row.insertCell(4).textContent = process.status || '-';
+        });
+    } else {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No proxy processes detected</td></tr>';
+    }
+}
+
+function updateLastUpdated(timestamp) {
+    document.getElementById('lastUpdated').textContent = formatTimestamp(timestamp);
+}
+
+function loadProxyData() {
+    fetch('/api/proxy-detection')
+        .then(response => response.json())
+        .then(data => {
+            proxyData = data;
+            updateRiskAssessment(data);
+            updateEnvironmentVariables(data);
+            updateNetworkRoutes(data);
+            updateDnsServers(data);
+            updateProxyPorts(data);
+            updateProxyProcesses(data);
+            updateLastUpdated(data.timestamp);
+        })
+        .catch(error => {
+            console.error('Error loading proxy data:', error);
+            showAlert('Error loading proxy detection data', 'danger');
+        });
+}
+
+function refreshProxyData() {
+    const button = document.querySelector('button[onclick="refreshProxyData()"]');
+    const icon = button.querySelector('i');
+    
+    // Add spinning animation
+    icon.classList.add('fa-spin');
+    
+    loadProxyData();
+    
+    // Remove spinning animation after a delay
+    setTimeout(() => {
+        icon.classList.remove('fa-spin');
+    }, 1000);
+}
+
+// Load data on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadProxyData();
+    
+    // Auto-refresh every 30 seconds
+    setInterval(loadProxyData, 30000);
+});
+</script>
+{% endblock %}

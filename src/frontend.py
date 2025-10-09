@@ -162,6 +162,11 @@ def config_page():
     """Configuration management page."""
     return render_template('config.html')
 
+@app.route('/proxy-detection')
+def proxy_detection_page():
+    """Enhanced proxy detection page."""
+    return render_template('proxy-detection.html')
+
 @app.route('/api/config')
 def get_config():
     """API endpoint to get current configuration."""
@@ -217,6 +222,12 @@ def reload_config():
     """API endpoint to reload configuration."""
     config_manager.reload_config()
     return jsonify({'message': 'Configuration reloaded'})
+
+@app.route('/api/proxy-detection')
+def get_proxy_detection():
+    """API endpoint to get comprehensive proxy detection data."""
+    proxy_data = monitor.check_proxy_usage()
+    return jsonify(proxy_data)
 
 @app.errorhandler(403)
 def forbidden(error):

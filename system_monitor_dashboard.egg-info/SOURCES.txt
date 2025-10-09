@@ -11,10 +11,12 @@ src/templates/403.html
 src/templates/404.html
 src/templates/500.html
 src/templates/base.html
+src/templates/clients.html
 src/templates/config.html
 src/templates/dashboard.html
 src/templates/databases.html
 src/templates/ports.html
+src/templates/proxy-detection.html
 src/templates/services.html
 src/templates/system.html
 system_monitor_dashboard.egg-info/PKG-INFO
