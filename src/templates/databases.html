@@ -1,0 +1,349 @@
+{% extends "base.html" %}
+
+{% block title %}Databases - System Monitor{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">
+            <i class="fas fa-database me-2"></i>Database Status
+            <small class="text-muted">Monitor MySQL and PostgreSQL databases</small>
+        </h1>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-12 text-end">
+        <button class="btn btn-outline-primary" onclick="refreshDatabases()">
+            <i class="fas fa-sync-alt me-1"></i>Refresh All
+        </button>
+    </div>
+</div>
+
+<div class="row">
+    <!-- MySQL Status -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">
+                    <i class="fab fa-mysql me-2"></i>MySQL Database
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="mysql-details">
+                    <div class="text-center">
+                        <i class="fas fa-spinner fa-spin fa-2x"></i>
+                        <p class="mt-2">Loading MySQL status...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PostgreSQL Status -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-elephant me-2"></i>PostgreSQL Database
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="postgresql-details">
+                    <div class="text-center">
+                        <i class="fas fa-spinner fa-spin fa-2x"></i>
+                        <p class="mt-2">Loading PostgreSQL status...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Database Comparison -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-chart-bar me-2"></i>Database Comparison
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="database-comparison">
+                    <div class="text-center">
+                        <i class="fas fa-spinner fa-spin fa-2x"></i>
+                        <p class="mt-2">Loading comparison data...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function refreshDatabases() {
+    refreshMySQL();
+    refreshPostgreSQL();
+    updateComparison();
+}
+
+function refreshMySQL() {
+    fetch('/api/mysql')
+        .then(response => response.json())
+        .then(data => {
+            displayMySQLStatus(data);
+        })
+        .catch(error => {
+            console.error('Error fetching MySQL status:', error);
+            showError('mysql-details', 'Failed to load MySQL status');
+        });
+}
+
+function refreshPostgreSQL() {
+    fetch('/api/postgresql')
+        .then(response => response.json())
+        .then(data => {
+            displayPostgreSQLStatus(data);
+        })
+        .catch(error => {
+            console.error('Error fetching PostgreSQL status:', error);
+            showError('postgresql-details', 'Failed to load PostgreSQL status');
+        });
+}
+
+function displayMySQLStatus(data) {
+    const container = document.getElementById('mysql-details');
+    const statusClass = data.running ? 'success' : 'danger';
+    const statusIcon = data.running ? 'fa-check-circle' : 'fa-times-circle';
+    
+    let html = `
+        <div class="row mb-3">
+            <div class="col-12 text-center">
+                <i class="fas ${statusIcon} fa-3x text-${statusClass} mb-2"></i>
+                <h4 class="text-${statusClass}">${data.status}</h4>
+            </div>
+        </div>
+        
+        <div class="row">
+            <div class="col-6">
+                <strong>Port Status:</strong>
+            </div>
+            <div class="col-6">
+                <span class="badge bg-${data.port_accessible ? 'success' : 'danger'}">
+                    ${data.port_accessible ? `Port ${data.port} Accessible` : 'Port Not Accessible'}
+                </span>
+            </div>
+        </div>
+        
+        <div class="row mt-2">
+            <div class="col-6">
+                <strong>Processes:</strong>
+            </div>
+            <div class="col-6">
+                <span class="badge bg-info">${data.processes.length} Running</span>
+            </div>
+        </div>
+    `;
+    
+    if (data.processes.length > 0) {
+        html += `
+            <div class="mt-3">
+                <h6>Running Processes:</h6>
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>PID</th>
+                                <th>Name</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+        `;
+        
+        data.processes.forEach(process => {
+            html += `
+                <tr>
+                    <td><code>${process.pid}</code></td>
+                    <td>${process.name}</td>
+                </tr>
+            `;
+        });
+        
+        html += '</tbody></table></div></div>';
+    }
+    
+    container.innerHTML = html;
+}
+
+function displayPostgreSQLStatus(data) {
+    const container = document.getElementById('postgresql-details');
+    const statusClass = data.running ? 'success' : 'danger';
+    const statusIcon = data.running ? 'fa-check-circle' : 'fa-times-circle';
+    
+    let html = `
+        <div class="row mb-3">
+            <div class="col-12 text-center">
+                <i class="fas ${statusIcon} fa-3x text-${statusClass} mb-2"></i>
+                <h4 class="text-${statusClass}">${data.status}</h4>
+            </div>
+        </div>
+        
+        <div class="row">
+            <div class="col-6">
+                <strong>Port Status:</strong>
+            </div>
+            <div class="col-6">
+                <span class="badge bg-${data.port_accessible ? 'success' : 'danger'}">
+                    ${data.port_accessible ? `Port ${data.port} Accessible` : 'Port Not Accessible'}
+                </span>
+            </div>
+        </div>
+        
+        <div class="row mt-2">
+            <div class="col-6">
+                <strong>Processes:</strong>
+            </div>
+            <div class="col-6">
+                <span class="badge bg-info">${data.processes.length} Running</span>
+            </div>
+        </div>
+    `;
+    
+    if (data.processes.length > 0) {
+        html += `
+            <div class="mt-3">
+                <h6>Running Processes:</h6>
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>PID</th>
+                                <th>Name</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+        `;
+        
+        data.processes.forEach(process => {
+            html += `
+                <tr>
+                    <td><code>${process.pid}</code></td>
+                    <td>${process.name}</td>
+                </tr>
+            `;
+        });
+        
+        html += '</tbody></table></div></div>';
+    }
+    
+    container.innerHTML = html;
+}
+
+function updateComparison() {
+    Promise.all([
+        fetch('/api/mysql').then(response => response.json()),
+        fetch('/api/postgresql').then(response => response.json())
+    ])
+    .then(([mysqlData, postgresData]) => {
+        displayComparison(mysqlData, postgresData);
+    })
+    .catch(error => {
+        console.error('Error fetching comparison data:', error);
+        showError('database-comparison', 'Failed to load comparison data');
+    });
+}
+
+function displayComparison(mysqlData, postgresData) {
+    const container = document.getElementById('database-comparison');
+    
+    let html = `
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card border-primary">
+                    <div class="card-header bg-primary text-white">
+                        <h6 class="mb-0">MySQL</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-6">Status:</div>
+                            <div class="col-6">
+                                <span class="badge bg-${mysqlData.running ? 'success' : 'danger'}">
+                                    ${mysqlData.status}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-6">Port:</div>
+                            <div class="col-6">
+                                <span class="badge bg-${mysqlData.port_accessible ? 'success' : 'danger'}">
+                                    ${mysqlData.port_accessible ? mysqlData.port : 'N/A'}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-6">Processes:</div>
+                            <div class="col-6">
+                                <span class="badge bg-info">${mysqlData.processes.length}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="card border-info">
+                    <div class="card-header bg-info text-white">
+                        <h6 class="mb-0">PostgreSQL</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-6">Status:</div>
+                            <div class="col-6">
+                                <span class="badge bg-${postgresData.running ? 'success' : 'danger'}">
+                                    ${postgresData.status}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-6">Port:</div>
+                            <div class="col-6">
+                                <span class="badge bg-${postgresData.port_accessible ? 'success' : 'danger'}">
+                                    ${postgresData.port_accessible ? postgresData.port : 'N/A'}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-6">Processes:</div>
+                            <div class="col-6">
+                                <span class="badge bg-info">${postgresData.processes.length}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row mt-3">
+            <div class="col-12">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>Summary:</strong> 
+                    ${mysqlData.running && postgresData.running ? 'Both databases are running' : 
+                      mysqlData.running ? 'Only MySQL is running' : 
+                      postgresData.running ? 'Only PostgreSQL is running' : 
+                      'Neither database is running'}
+                </div>
+            </div>
+        </div>
+    `;
+    
+    container.innerHTML = html;
+}
+
+// Initial load
+refreshDatabases();
+</script>
+{% endblock %}
