@@ -1,0 +1,10 @@
+{
+  "custom_labels": {
+    "4569": "Data Tool",
+    "4000": "Express.js Server",
+    "7001": "Custom Database",
+    "8888": "Jupyter Notebook",
+    "9090": "Prometheus",
+    "9100": "Node Exporter",
+    "9200": "Elasticsearch"
+  }

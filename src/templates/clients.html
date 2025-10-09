@@ -1,0 +1,390 @@
+{% extends "base.html" %}
+
+{% block title %}Clients - System Monitor{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">
+            <i class="fas fa-users me-2"></i>Client Monitor
+            <small class="text-muted">Monitor all clients accessing the server</small>
+        </h1>
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title" id="active-clients-count">0</h4>
+                        <p class="card-text">Active Clients</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-user-check fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title" id="total-clients-count">0</h4>
+                        <p class="card-text">Total Clients</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-users fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title" id="unique-clients-24h">0</h4>
+                        <p class="card-text">Unique (24h)</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-calendar-day fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title" id="total-requests">0</h4>
+                        <p class="card-text">Total Requests</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-chart-line fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-md-6">
+        <div class="input-group">
+            <span class="input-group-text"><i class="fas fa-search"></i></span>
+            <input type="text" class="form-control" id="client-search" placeholder="Search clients...">
+        </div>
+    </div>
+    <div class="col-md-6 text-end">
+        <button class="btn btn-outline-primary" onclick="refreshClients()">
+            <i class="fas fa-sync-alt me-1"></i>Refresh
+        </button>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-list me-2"></i>Active Clients
+                    <span class="badge bg-primary ms-2" id="client-count">0</span>
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="clients-container">
+                    <div class="text-center">
+                        <i class="fas fa-spinner fa-spin fa-2x"></i>
+                        <p class="mt-2">Loading clients...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-chart-bar me-2"></i>Top Endpoints
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="top-endpoints">
+                    <div class="text-center">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <p class="mt-2">Loading...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Client Details Modal -->
+<div class="modal fade" id="clientModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Client Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="client-details">
+                    <div class="text-center">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <p class="mt-2">Loading client details...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let allClients = [];
+let clientStats = {};
+
+function refreshClients() {
+    showLoading('clients-container');
+    
+    // Fetch clients and stats in parallel
+    Promise.all([
+        fetch('/api/clients').then(response => response.json()),
+        fetch('/api/client-stats').then(response => response.json())
+    ]).then(([clients, stats]) => {
+        allClients = clients;
+        clientStats = stats;
+        displayClients(clients);
+        updateStatistics(stats);
+        document.getElementById('client-count').textContent = clients.length;
+    }).catch(error => {
+        console.error('Error fetching client data:', error);
+        showError('clients-container', 'Failed to load client data');
+    });
+}
+
+function displayClients(clients) {
+    const container = document.getElementById('clients-container');
+    
+    if (!clients || clients.length === 0) {
+        container.innerHTML = '<p class="text-muted text-center">No active clients found</p>';
+        return;
+    }
+    
+    let html = `
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-dark">
+                    <tr>
+                        <th onclick="sortClients('client_ip')" style="cursor: pointer;">
+                            Client IP <i class="fas fa-sort"></i>
+                        </th>
+                        <th onclick="sortClients('user_agent')" style="cursor: pointer;">
+                            User Agent <i class="fas fa-sort"></i>
+                        </th>
+                        <th onclick="sortClients('request_count')" style="cursor: pointer;">
+                            Requests <i class="fas fa-sort"></i>
+                        </th>
+                        <th onclick="sortClients('endpoint_count')" style="cursor: pointer;">
+                            Endpoints <i class="fas fa-sort"></i>
+                        </th>
+                        <th onclick="sortClients('last_seen')" style="cursor: pointer;">
+                            Last Seen <i class="fas fa-sort"></i>
+                        </th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    clients.forEach(client => {
+        const isActive = client.is_active;
+        const statusClass = isActive ? 'success' : 'secondary';
+        const statusText = isActive ? 'Active' : 'Inactive';
+        
+        html += `
+            <tr>
+                <td>
+                    <code>${client.client_ip}</code>
+                </td>
+                <td>
+                    <small>${truncateText(client.user_agent, 50)}</small>
+                </td>
+                <td>
+                    <span class="badge bg-info">${client.request_count}</span>
+                </td>
+                <td>
+                    <span class="badge bg-secondary">${client.endpoint_count}</span>
+                </td>
+                <td>
+                    <small>${formatTimeAgo(client.time_since_last_seen)}</small>
+                </td>
+                <td>
+                    <span class="badge bg-${statusClass}">${statusText}</span>
+                </td>
+                <td>
+                    <button class="btn btn-sm btn-outline-primary" onclick="showClientDetails('${client.client_ip}')">
+                        <i class="fas fa-eye"></i> Details
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+    
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+}
+
+function updateStatistics(stats) {
+    document.getElementById('active-clients-count').textContent = stats.active_clients || 0;
+    document.getElementById('total-clients-count').textContent = stats.total_clients || 0;
+    document.getElementById('unique-clients-24h').textContent = stats.unique_clients_24h || 0;
+    document.getElementById('total-requests').textContent = stats.total_requests || 0;
+    
+    // Update top endpoints
+    const endpointsContainer = document.getElementById('top-endpoints');
+    if (stats.top_endpoints && stats.top_endpoints.length > 0) {
+        let html = '<div class="list-group list-group-flush">';
+        stats.top_endpoints.forEach(endpoint => {
+            html += `
+                <div class="list-group-item d-flex justify-content-between align-items-center">
+                    <code>${endpoint.endpoint}</code>
+                    <span class="badge bg-primary rounded-pill">${endpoint.count}</span>
+                </div>
+            `;
+        });
+        html += '</div>';
+        endpointsContainer.innerHTML = html;
+    } else {
+        endpointsContainer.innerHTML = '<p class="text-muted text-center">No endpoint data available</p>';
+    }
+}
+
+function showClientDetails(clientIp) {
+    const modal = new bootstrap.Modal(document.getElementById('clientModal'));
+    const detailsContainer = document.getElementById('client-details');
+    
+    detailsContainer.innerHTML = '<div class="text-center"><i class="fas fa-spinner fa-spin"></i><p class="mt-2">Loading...</p></div>';
+    modal.show();
+    
+    fetch(`/api/client-history/${clientIp}`)
+        .then(response => response.json())
+        .then(history => {
+            let html = `
+                <h6>Client: <code>${clientIp}</code></h6>
+                <hr>
+                <h6>Recent Activity (Last 20 requests)</h6>
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Endpoint</th>
+                                <th>Status</th>
+                                <th>Referer</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            
+            history.slice(0, 20).forEach(record => {
+                const statusClass = record.status_code === 200 ? 'success' : 'danger';
+                html += `
+                    <tr>
+                        <td><small>${formatTimestamp(record.timestamp)}</small></td>
+                        <td><code>${record.endpoint}</code></td>
+                        <td><span class="badge bg-${statusClass}">${record.status_code}</span></td>
+                        <td><small>${record.referer}</small></td>
+                    </tr>
+                `;
+            });
+            
+            html += '</tbody></table></div>';
+            detailsContainer.innerHTML = html;
+        })
+        .catch(error => {
+            console.error('Error fetching client history:', error);
+            detailsContainer.innerHTML = '<p class="text-danger">Error loading client details</p>';
+        });
+}
+
+function sortClients(column) {
+    allClients.sort((a, b) => {
+        if (column === 'client_ip') {
+            return a[column].localeCompare(b[column]);
+        } else if (column === 'request_count' || column === 'endpoint_count') {
+            return b[column] - a[column];
+        } else if (column === 'last_seen') {
+            return new Date(b[column]) - new Date(a[column]);
+        } else {
+            return a[column].localeCompare(b[column]);
+        }
+    });
+    displayClients(allClients);
+}
+
+function filterClients() {
+    const searchTerm = document.getElementById('client-search').value.toLowerCase();
+    const filteredClients = allClients.filter(client => 
+        client.client_ip.toLowerCase().includes(searchTerm) ||
+        client.user_agent.toLowerCase().includes(searchTerm)
+    );
+    displayClients(filteredClients);
+    document.getElementById('client-count').textContent = filteredClients.length;
+}
+
+function truncateText(text, maxLength) {
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength) + '...';
+}
+
+function formatTimeAgo(timeString) {
+    // Convert "X days, Y:Z:W" format to more readable format
+    if (timeString.includes('day')) {
+        return timeString.split(',')[0] + ' ago';
+    }
+    return timeString;
+}
+
+function formatTimestamp(timestamp) {
+    return new Date(timestamp).toLocaleString();
+}
+
+function showLoading(containerId) {
+    document.getElementById(containerId).innerHTML = `
+        <div class="text-center">
+            <i class="fas fa-spinner fa-spin fa-2x"></i>
+            <p class="mt-2">Loading...</p>
+        </div>
+    `;
+}
+
+function showError(containerId, message) {
+    document.getElementById(containerId).innerHTML = `
+        <div class="alert alert-danger text-center">
+            <i class="fas fa-exclamation-triangle me-2"></i>${message}
+        </div>
+    `;
+}
+
+// Event listeners
+document.getElementById('client-search').addEventListener('input', filterClients);
+
+// Initial load
+refreshClients();
+
+// Auto-refresh every 30 seconds
+setInterval(refreshClients, 30000);
+</script>
+{% endblock %}

@@ -80,8 +80,11 @@ function displayPorts(ports) {
                         <th onclick="sortPorts('local_address')" style="cursor: pointer;">
                             Local Address <i class="fas fa-sort"></i>
                         </th>
-                        <th onclick="sortPorts('remote_address')" style="cursor: pointer;">
-                            Remote Address <i class="fas fa-sort"></i>
+                        <th onclick="sortPorts('port_label')" style="cursor: pointer;">
+                            Service <i class="fas fa-sort"></i>
+                        </th>
+                        <th onclick="sortPorts('process_name')" style="cursor: pointer;">
+                            Process <i class="fas fa-sort"></i>
                         </th>
                         <th onclick="sortPorts('status')" style="cursor: pointer;">
                             Status <i class="fas fa-sort"></i>
@@ -99,17 +102,31 @@ function displayPorts(ports) {
     
     ports.forEach(port => {
         const statusClass = port.status === 'LISTEN' ? 'success' : 'info';
-        const portNumber = port.local_address.split(':').pop();
-        const isCommonPort = isCommonPortNumber(portNumber);
+        const portLabel = port.port_label || 'Unknown Service';
+        const processName = port.process_name || 'N/A';
+        
+        // Determine badge color based on service type
+        let labelClass = 'bg-secondary'; // default
+        if (portLabel.includes('MySQL') || portLabel.includes('PostgreSQL') || portLabel.includes('Redis') || portLabel.includes('MongoDB')) {
+            labelClass = 'bg-primary'; // database
+        } else if (portLabel.includes('HTTP') || portLabel.includes('HTTPS') || portLabel.includes('Node.js') || portLabel.includes('Python') || portLabel.includes('Flask')) {
+            labelClass = 'bg-success'; // web server
+        } else if (portLabel.includes('Development') || portLabel.includes('Dev')) {
+            labelClass = 'bg-warning'; // development
+        } else if (portLabel.includes('Proxy') || portLabel.includes('VPN')) {
+            labelClass = 'bg-info'; // proxy/vpn
+        }
         
         html += `
             <tr>
                 <td>
                     <code>${port.local_address}</code>
-                    ${isCommonPort ? `<span class="badge bg-info ms-1">${getPortService(portNumber)}</span>` : ''}
                 </td>
                 <td>
-                    <code>${port.remote_address}</code>
+                    <span class="badge ${labelClass}">${portLabel}</span>
+                </td>
+                <td>
+                    <code>${processName}</code>
                 </td>
                 <td>
                     <span class="badge bg-${statusClass}">${port.status}</span>
@@ -147,7 +164,9 @@ function filterPorts() {
         port.local_address.toLowerCase().includes(searchTerm) ||
         port.remote_address.toLowerCase().includes(searchTerm) ||
         port.status.toLowerCase().includes(searchTerm) ||
-        (port.pid && port.pid.toString().includes(searchTerm))
+        (port.pid && port.pid.toString().includes(searchTerm)) ||
+        (port.port_label && port.port_label.toLowerCase().includes(searchTerm)) ||
+        (port.process_name && port.process_name.toLowerCase().includes(searchTerm))
     );
     displayPorts(filteredPorts);
     document.getElementById('port-count').textContent = filteredPorts.length;

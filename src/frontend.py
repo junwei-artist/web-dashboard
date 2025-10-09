@@ -5,8 +5,9 @@ Provides web interface for monitoring services, ports, and databases.
 """
 
 from flask import Flask, render_template, jsonify, request, abort
-from .backend import SystemMonitor
-from .config_manager import ConfigManager
+from backend import SystemMonitor
+from config_manager import ConfigManager
+import logging
 import json
 import threading
 import time
@@ -16,9 +17,30 @@ app = Flask(__name__)
 monitor = SystemMonitor()
 config_manager = ConfigManager()
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 # Global variable to store latest monitoring data
 latest_data = {}
 data_lock = threading.Lock()
+
+@app.before_request
+def log_client_access():
+    """Log client access for monitoring."""
+    client_ip = request.environ.get('HTTP_X_FORWARDED_FOR', request.environ.get('REMOTE_ADDR'))
+    user_agent = request.headers.get('User-Agent')
+    referer = request.headers.get('Referer')
+    endpoint = request.endpoint
+    
+    # Log the access
+    monitor.log_client_access(
+        client_ip=client_ip,
+        user_agent=user_agent,
+        referer=referer,
+        status_code=200,  # Will be updated if there's an error
+        endpoint=endpoint
+    )
 
 def check_ip_access():
     """Check if client IP is allowed to access the dashboard."""
@@ -74,6 +96,24 @@ def get_ports():
     ports = monitor.get_active_ports()
     return jsonify(ports)
 
+@app.route('/api/clients')
+def get_clients():
+    """API endpoint to get active clients."""
+    clients = monitor.get_active_clients()
+    return jsonify(clients)
+
+@app.route('/api/client-stats')
+def get_client_statistics():
+    """API endpoint to get client statistics."""
+    stats = monitor.get_client_statistics()
+    return jsonify(stats)
+
+@app.route('/api/client-history/<client_ip>')
+def get_client_history(client_ip):
+    """API endpoint to get client access history."""
+    history = monitor.get_client_history(client_ip)
+    return jsonify(history)
+
 @app.route('/api/mysql')
 def get_mysql_status():
     """API endpoint to get MySQL status."""
@@ -101,6 +141,11 @@ def services_page():
 def ports_page():
     """Ports monitoring page."""
     return render_template('ports.html')
+
+@app.route('/clients')
+def clients_page():
+    """Client monitoring page."""
+    return render_template('clients.html')
 
 @app.route('/databases')
 def databases_page():

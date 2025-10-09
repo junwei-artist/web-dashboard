@@ -84,6 +84,50 @@
     </div>
 </div>
 
+<!-- Client Monitoring -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-users me-2"></i>Client Activity
+                    <a href="/clients" class="btn btn-sm btn-outline-light float-end">
+                        <i class="fas fa-external-link-alt me-1"></i>View Details
+                    </a>
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="text-center">
+                            <h4 class="text-primary" id="dashboard-active-clients">0</h4>
+                            <small class="text-muted">Active Clients</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center">
+                            <h4 class="text-info" id="dashboard-total-clients">0</h4>
+                            <small class="text-muted">Total Clients</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center">
+                            <h4 class="text-warning" id="dashboard-requests-per-minute">0</h4>
+                            <small class="text-muted">Requests/Min</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center">
+                            <h4 class="text-success" id="dashboard-unique-24h">0</h4>
+                            <small class="text-muted">Unique (24h)</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Quick Stats -->
 <div class="row">
     <div class="col-md-6 mb-3">
@@ -129,19 +173,21 @@
 {% block scripts %}
 <script>
 function refreshData() {
-    fetch('/api/monitoring-data')
-        .then(response => response.json())
-        .then(data => {
-            updateSystemInfo(data.system_info);
-            updateDatabaseStatus(data.mysql, data.postgresql);
-            updateTopServices(data.services);
-            updateActivePorts(data.ports);
-            updateLastUpdated(data.timestamp);
-        })
-        .catch(error => {
-            console.error('Error fetching data:', error);
-            showError('cpu-usage', 'Failed to load system data');
-        });
+    // Fetch monitoring data and client statistics in parallel
+    Promise.all([
+        fetch('/api/monitoring-data').then(response => response.json()),
+        fetch('/api/client-stats').then(response => response.json())
+    ]).then(([data, clientStats]) => {
+        updateSystemInfo(data.system_info);
+        updateDatabaseStatus(data.mysql, data.postgresql);
+        updateTopServices(data.services);
+        updateActivePorts(data.ports);
+        updateClientStatistics(clientStats);
+        updateLastUpdated(data.timestamp);
+    }).catch(error => {
+        console.error('Error fetching data:', error);
+        showError('cpu-usage', 'Failed to load system data');
+    });
 }
 
 function updateSystemInfo(systemInfo) {
@@ -217,12 +263,27 @@ function updateActivePorts(ports) {
     const portsDiv = document.getElementById('active-ports');
     if (ports && ports.length > 0) {
         let html = '<div class="table-responsive"><table class="table table-sm">';
-        html += '<thead><tr><th>Port</th><th>Status</th><th>PID</th></tr></thead><tbody>';
+        html += '<thead><tr><th>Port</th><th>Service</th><th>Status</th><th>PID</th></tr></thead><tbody>';
         
         ports.slice(0, 5).forEach(port => {
+            const portLabel = port.port_label || 'Unknown Service';
+            
+            // Determine badge color based on service type
+            let labelClass = 'bg-secondary'; // default
+            if (portLabel.includes('MySQL') || portLabel.includes('PostgreSQL') || portLabel.includes('Redis') || portLabel.includes('MongoDB')) {
+                labelClass = 'bg-primary'; // database
+            } else if (portLabel.includes('HTTP') || portLabel.includes('HTTPS') || portLabel.includes('Node.js') || portLabel.includes('Python') || portLabel.includes('Flask')) {
+                labelClass = 'bg-success'; // web server
+            } else if (portLabel.includes('Development') || portLabel.includes('Dev')) {
+                labelClass = 'bg-warning'; // development
+            } else if (portLabel.includes('Proxy') || portLabel.includes('VPN')) {
+                labelClass = 'bg-info'; // proxy/vpn
+            }
+            
             html += `
                 <tr>
-                    <td>${port.local_address}</td>
+                    <td><code>${port.local_address}</code></td>
+                    <td><span class="badge ${labelClass}">${portLabel}</span></td>
                     <td><span class="badge bg-success">${port.status}</span></td>
                     <td>${port.pid || 'N/A'}</td>
                 </tr>
@@ -233,6 +294,15 @@ function updateActivePorts(ports) {
         portsDiv.innerHTML = html;
     } else {
         portsDiv.innerHTML = '<p class="text-muted">No ports data available</p>';
+    }
+}
+
+function updateClientStatistics(clientStats) {
+    if (clientStats) {
+        document.getElementById('dashboard-active-clients').textContent = clientStats.active_clients || 0;
+        document.getElementById('dashboard-total-clients').textContent = clientStats.total_clients || 0;
+        document.getElementById('dashboard-requests-per-minute').textContent = clientStats.requests_per_minute || 0;
+        document.getElementById('dashboard-unique-24h').textContent = clientStats.unique_clients_24h || 0;
     }
 }
 
