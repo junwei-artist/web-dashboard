@@ -31,6 +31,10 @@ class SystemMonitor:
         # Client monitoring
         self._active_clients = {}  # {client_ip: {last_seen, user_agent, request_count, endpoints}}
         self._client_history = []  # List of all client access records
+        
+        # Network connection monitoring
+        self._network_connections = {}  # {connection_id: {local_addr, remote_addr, status, process, timestamp}}
+        self._connection_history = []  # List of all network connection records
     
     def _initialize_port_labels(self) -> Dict[str, str]:
         """Initialize common port labels for known services."""
@@ -889,6 +893,530 @@ class SystemMonitor:
                 'error': str(e),
                 'timestamp': datetime.now().isoformat(),
                 'risk_level': 'UNKNOWN'
+            }
+
+    def monitor_network_connections(self) -> Dict[str, Any]:
+        """Monitor all network connections to track clients across all ports."""
+        try:
+            current_time = datetime.now()
+            connections = []
+            
+            # Try psutil first
+            try:
+                net_connections = psutil.net_connections(kind='inet')
+                
+                for conn in net_connections:
+                    try:
+                        # Only track established connections (not listening ports)
+                        if conn.status in ['ESTABLISHED', 'TIME_WAIT', 'CLOSE_WAIT', 'FIN_WAIT1', 'FIN_WAIT2']:
+                            connection_id = f"{conn.laddr.ip}:{conn.laddr.port}-{conn.raddr.ip}:{conn.raddr.port}"
+                            
+                            # Get process info
+                            process_name = 'Unknown'
+                            pid = 'N/A'
+                            if conn.pid:
+                                try:
+                                    process = psutil.Process(conn.pid)
+                                    process_name = process.name()
+                                    pid = conn.pid
+                                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                                    pass
+                            
+                            # Get port label
+                            port_label = self.get_port_label(str(conn.laddr.port), process_name)
+                            
+                            # Format addresses properly for IPv4 and IPv6
+                            local_addr = f"{conn.laddr.ip}:{conn.laddr.port}" if conn.laddr.ip else "Unknown"
+                            remote_addr = f"{conn.raddr.ip}:{conn.raddr.port}" if conn.raddr.ip else "Unknown"
+                            
+                            connection_info = {
+                                'connection_id': connection_id,
+                                'local_address': local_addr,
+                                'remote_address': remote_addr,
+                                'remote_ip': conn.raddr.ip if conn.raddr.ip else 'Unknown',
+                                'remote_port': conn.raddr.port if conn.raddr.port else 'Unknown',
+                                'remote_ip_formatted': self._format_ip_address(conn.raddr.ip if conn.raddr.ip else 'Unknown'),
+                                'status': conn.status,
+                                'process_name': process_name,
+                                'pid': pid,
+                                'port_label': port_label,
+                                'timestamp': current_time.isoformat()
+                            }
+                            
+                            connections.append(connection_info)
+                            
+                            # Update connection tracking
+                            self._network_connections[connection_id] = connection_info
+                            
+                    except (psutil.NoSuchProcess, psutil.AccessDenied, AttributeError, OSError):
+                        continue
+                        
+            except (psutil.AccessDenied, OSError) as e:
+                logger.warning(f"Access denied to network connections: {e}")
+                # Fallback to system commands
+                connections = self._get_network_connections_fallback()
+            
+            # Clean up old connections
+            self._cleanup_old_connections()
+            
+            # Add to history
+            for conn in connections:
+                self._connection_history.append(conn)
+            
+            # Limit history size
+            if len(self._connection_history) > 1000:
+                self._connection_history = self._connection_history[-1000:]
+            
+            return {
+                'active_connections': connections,
+                'total_connections': len(connections),
+                'timestamp': current_time.isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"Error monitoring network connections: {e}")
+            return {'active_connections': [], 'total_connections': 0, 'error': str(e)}
+    
+    def _get_network_connections_fallback(self) -> List[Dict[str, Any]]:
+        """Fallback method to get network connections using system commands."""
+        try:
+            connections = []
+            current_time = datetime.now()
+            
+            # Try netstat command
+            try:
+                result = subprocess.run(['netstat', '-tn'], capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    lines = result.stdout.split('\n')
+                    for line in lines:
+                        if 'ESTABLISHED' in line or 'TIME_WAIT' in line:
+                            parts = line.split()
+                            if len(parts) >= 6:
+                                local_addr = parts[3]
+                                remote_addr = parts[4]
+                                status = parts[5]
+                                
+                                # Extract IPs and ports (handle both IPv4 and IPv6)
+                                # IPv4: 127.0.0.1:8080 (colon separator)
+                                # IPv6: fe80::500a:48ff:.8770 (dot separator)
+                                
+                                # Parse local address (macOS netstat uses dots for both IPv4 and IPv6)
+                                if '.' in local_addr:
+                                    # Both IPv4 and IPv6 use dot separator on macOS
+                                    local_ip, local_port = local_addr.rsplit('.', 1)
+                                elif ':' in local_addr:
+                                    # Fallback for colon separator
+                                    local_ip, local_port = local_addr.rsplit(':', 1)
+                                else:
+                                    local_ip, local_port = local_addr, 'Unknown'
+                                
+                                # Parse remote address (macOS netstat uses dots for both IPv4 and IPv6)
+                                if '.' in remote_addr:
+                                    # Both IPv4 and IPv6 use dot separator on macOS
+                                    remote_ip, remote_port = remote_addr.rsplit('.', 1)
+                                elif ':' in remote_addr:
+                                    # Fallback for colon separator
+                                    remote_ip, remote_port = remote_addr.rsplit(':', 1)
+                                else:
+                                    remote_ip, remote_port = remote_addr, 'Unknown'
+                                
+                                # Create connection info for all parsed connections
+                                connection_id = f"{local_addr}-{remote_addr}"
+                                
+                                connection_info = {
+                                    'connection_id': connection_id,
+                                    'local_address': local_addr,
+                                    'remote_address': remote_addr,
+                                    'remote_ip': remote_ip,
+                                    'remote_port': remote_port,
+                                    'remote_ip_formatted': self._format_ip_address(remote_ip),
+                                    'status': status,
+                                    'process_name': 'Unknown',
+                                    'pid': 'N/A',
+                                    'port_label': self.get_port_label(local_port),
+                                    'timestamp': current_time.isoformat()
+                                }
+                                
+                                connections.append(connection_info)
+            except (subprocess.TimeoutExpired, FileNotFoundError):
+                pass
+            
+            return connections
+            
+        except Exception as e:
+            logger.error(f"Error in network connections fallback: {e}")
+            return []
+    
+    def _cleanup_old_connections(self):
+        """Clean up old network connections that are no longer active."""
+        current_time = datetime.now()
+        cutoff_time = current_time.timestamp() - 300  # 5 minutes ago
+        
+        # Remove old connections from tracking
+        old_connections = []
+        for conn_id, conn_data in self._network_connections.items():
+            conn_time = datetime.fromisoformat(conn_data['timestamp']).timestamp()
+            if conn_time < cutoff_time:
+                old_connections.append(conn_id)
+        
+        for conn_id in old_connections:
+            del self._network_connections[conn_id]
+    
+    def _format_ip_address(self, ip_address: str) -> str:
+        """Format IP address for better display."""
+        if not ip_address or ip_address == 'Unknown':
+            return 'Unknown'
+        
+        # Handle IPv6 addresses
+        if '::' in ip_address:
+            # IPv6 address - could be link-local (fe80::) or other
+            if ip_address.startswith('fe80::'):
+                # Link-local address - show as "Link-Local"
+                return f"Link-Local ({ip_address})"
+            elif ip_address.startswith('::1'):
+                # IPv6 localhost
+                return "IPv6 Localhost"
+            else:
+                # Other IPv6 address
+                return f"IPv6 ({ip_address})"
+        elif ip_address.startswith('127.'):
+            # IPv4 localhost
+            return "Localhost"
+        elif ip_address.startswith('192.168.') or ip_address.startswith('10.') or ip_address.startswith('172.'):
+            # Private IPv4 address
+            return f"Private ({ip_address})"
+        else:
+            # Public IPv4 address
+            return ip_address
+    
+    def get_network_client_statistics(self) -> Dict[str, Any]:
+        """Get statistics about network clients across all ports."""
+        try:
+            current_time = datetime.now()
+            
+            # Get current connections
+            conn_data = self.monitor_network_connections()
+            active_connections = conn_data.get('active_connections', [])
+            
+            # Analyze clients
+            client_stats = {}
+            port_stats = {}
+            process_stats = {}
+            
+            for conn in active_connections:
+                remote_ip = conn.get('remote_ip', 'Unknown')
+                local_port = conn.get('local_address', '').split(':')[-1] if ':' in conn.get('local_address', '') else 'Unknown'
+                process_name = conn.get('process_name', 'Unknown')
+                
+                # Client statistics
+                if remote_ip not in client_stats:
+                    client_stats[remote_ip] = {
+                        'connection_count': 0,
+                        'ports_accessed': set(),
+                        'processes_accessed': set(),
+                        'last_seen': conn.get('timestamp', '')
+                    }
+                
+                client_stats[remote_ip]['connection_count'] += 1
+                client_stats[remote_ip]['ports_accessed'].add(local_port)
+                client_stats[remote_ip]['processes_accessed'].add(process_name)
+                
+                # Port statistics
+                if local_port not in port_stats:
+                    port_stats[local_port] = {
+                        'connection_count': 0,
+                        'unique_clients': set(),
+                        'port_label': conn.get('port_label', 'Unknown')
+                    }
+                
+                port_stats[local_port]['connection_count'] += 1
+                port_stats[local_port]['unique_clients'].add(remote_ip)
+                
+                # Process statistics
+                if process_name not in process_stats:
+                    process_stats[process_name] = {
+                        'connection_count': 0,
+                        'unique_clients': set(),
+                        'ports_served': set()
+                    }
+                
+                process_stats[process_name]['connection_count'] += 1
+                process_stats[process_name]['unique_clients'].add(remote_ip)
+                process_stats[process_name]['ports_served'].add(local_port)
+            
+            # Convert sets to counts for JSON serialization
+            for client in client_stats.values():
+                client['ports_accessed'] = len(client['ports_accessed'])
+                client['processes_accessed'] = len(client['processes_accessed'])
+            
+            for port in port_stats.values():
+                port['unique_clients'] = len(port['unique_clients'])
+            
+            for process in process_stats.values():
+                process['unique_clients'] = len(process['unique_clients'])
+                process['ports_served'] = len(process['ports_served'])
+            
+            return {
+                'timestamp': current_time.isoformat(),
+                'total_active_connections': len(active_connections),
+                'unique_clients': len(client_stats),
+                'active_ports': len(port_stats),
+                'active_processes': len(process_stats),
+                'client_statistics': client_stats,
+                'port_statistics': port_stats,
+                'process_statistics': process_stats,
+                'top_clients': sorted(client_stats.items(), key=lambda x: x[1]['connection_count'], reverse=True)[:10],
+                'top_ports': sorted(port_stats.items(), key=lambda x: x[1]['connection_count'], reverse=True)[:10],
+                'top_processes': sorted(process_stats.items(), key=lambda x: x[1]['connection_count'], reverse=True)[:10]
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting network client statistics: {e}")
+            return {
+                'timestamp': datetime.now().isoformat(),
+                'error': str(e),
+                'total_active_connections': 0,
+                'unique_clients': 0
+            }
+    
+    def get_clients_by_port(self) -> Dict[str, Any]:
+        """Get clients categorized by the ports they're accessing."""
+        try:
+            current_time = datetime.now()
+            
+            # Get current connections
+            conn_data = self.monitor_network_connections()
+            active_connections = conn_data.get('active_connections', [])
+            
+            # Group connections by port
+            ports_data = {}
+            
+            for conn in active_connections:
+                local_port = conn.get('local_address', '').split(':')[-1] if ':' in conn.get('local_address', '') else 'Unknown'
+                remote_ip = conn.get('remote_ip', 'Unknown')
+                remote_port = conn.get('remote_port', 'Unknown')
+                
+                # Initialize port data if not exists
+                if local_port not in ports_data:
+                    ports_data[local_port] = {
+                        'port': local_port,
+                        'port_label': conn.get('port_label', 'Unknown'),
+                        'process_name': conn.get('process_name', 'Unknown'),
+                        'pid': conn.get('pid', 'N/A'),
+                        'clients': {},
+                        'total_connections': 0,
+                        'unique_clients': 0
+                    }
+                
+                # Add client to port
+                client_key = f"{remote_ip}:{remote_port}"
+                if client_key not in ports_data[local_port]['clients']:
+                    ports_data[local_port]['clients'][client_key] = {
+                        'remote_ip': remote_ip,
+                        'remote_port': remote_port,
+                        'connection_count': 0,
+                        'connections': [],
+                        'last_seen': conn.get('timestamp', ''),
+                        'status': conn.get('status', 'Unknown')
+                    }
+                
+                # Update client data
+                client_data = ports_data[local_port]['clients'][client_key]
+                client_data['connection_count'] += 1
+                client_data['connections'].append({
+                    'connection_id': conn.get('connection_id', ''),
+                    'status': conn.get('status', 'Unknown'),
+                    'timestamp': conn.get('timestamp', '')
+                })
+                client_data['last_seen'] = conn.get('timestamp', '')
+                
+                # Update port totals
+                ports_data[local_port]['total_connections'] += 1
+            
+            # Calculate unique clients for each port
+            for port_data in ports_data.values():
+                port_data['unique_clients'] = len(port_data['clients'])
+            
+            # Sort ports by total connections
+            sorted_ports = sorted(ports_data.items(), key=lambda x: x[1]['total_connections'], reverse=True)
+            
+            # Convert to list format for easier frontend handling
+            ports_list = []
+            for port, port_data in sorted_ports:
+                # Sort clients by connection count
+                sorted_clients = sorted(port_data['clients'].items(), 
+                                      key=lambda x: x[1]['connection_count'], reverse=True)
+                
+                ports_list.append({
+                    'port': port_data['port'],
+                    'port_label': port_data['port_label'],
+                    'process_name': port_data['process_name'],
+                    'pid': port_data['pid'],
+                    'total_connections': port_data['total_connections'],
+                    'unique_clients': port_data['unique_clients'],
+                    'clients': [client_data for _, client_data in sorted_clients]
+                })
+            
+            return {
+                'timestamp': current_time.isoformat(),
+                'ports': ports_list,
+                'total_ports': len(ports_list),
+                'total_connections': sum(port['total_connections'] for port in ports_list),
+                'total_unique_clients': len(set(
+                    client['remote_ip'] for port in ports_list 
+                    for client in port['clients']
+                ))
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting clients by port: {e}")
+            return {
+                'timestamp': datetime.now().isoformat(),
+                'error': str(e),
+                'ports': [],
+                'total_ports': 0,
+                'total_connections': 0,
+                'total_unique_clients': 0
+            }
+    
+    def get_custom_port_clients(self) -> Dict[str, Any]:
+        """Get clients for ports defined in port_labels.json."""
+        try:
+            current_time = datetime.now()
+            
+            # Get custom ports from port_labels.json
+            custom_ports = set()
+            try:
+                with open('port_labels.json', 'r') as f:
+                    config = json.load(f)
+                    custom_labels = config.get('custom_labels', {})
+                    custom_ports = set(custom_labels.keys())
+            except (FileNotFoundError, json.JSONDecodeError) as e:
+                logger.warning(f"Could not load custom ports from port_labels.json: {e}")
+                custom_ports = set()
+            
+            # Get current connections
+            conn_data = self.monitor_network_connections()
+            active_connections = conn_data.get('active_connections', [])
+            
+            # Filter connections for custom ports
+            custom_port_connections = []
+            for conn in active_connections:
+                local_address = conn.get('local_address', '')
+                # Extract port from local address (handle both IPv4 and IPv6 formats)
+                if '.' in local_address:
+                    local_port = local_address.rsplit('.', 1)[-1]
+                elif ':' in local_address:
+                    local_port = local_address.rsplit(':', 1)[-1]
+                else:
+                    local_port = 'Unknown'
+                
+                if local_port in custom_ports:
+                    custom_port_connections.append(conn)
+            
+            # Group connections by custom port
+            ports_data = {}
+            
+            for conn in custom_port_connections:
+                local_address = conn.get('local_address', '')
+                # Extract port from local address (handle both IPv4 and IPv6 formats)
+                if '.' in local_address:
+                    local_port = local_address.rsplit('.', 1)[-1]
+                elif ':' in local_address:
+                    local_port = local_address.rsplit(':', 1)[-1]
+                else:
+                    local_port = 'Unknown'
+                
+                remote_ip = conn.get('remote_ip', 'Unknown')
+                remote_port = conn.get('remote_port', 'Unknown')
+                
+                # Initialize port data if not exists
+                if local_port not in ports_data:
+                    ports_data[local_port] = {
+                        'port': local_port,
+                        'port_label': conn.get('port_label', 'Unknown'),
+                        'process_name': conn.get('process_name', 'Unknown'),
+                        'pid': conn.get('pid', 'N/A'),
+                        'clients': {},
+                        'total_connections': 0,
+                        'unique_clients': 0,
+                        'is_custom_port': True
+                    }
+                
+                # Add client to port
+                client_key = f"{remote_ip}:{remote_port}"
+                if client_key not in ports_data[local_port]['clients']:
+                    ports_data[local_port]['clients'][client_key] = {
+                        'remote_ip': remote_ip,
+                        'remote_port': remote_port,
+                        'connection_count': 0,
+                        'connections': [],
+                        'last_seen': conn.get('timestamp', ''),
+                        'status': conn.get('status', 'Unknown')
+                    }
+                
+                # Update client data
+                client_data = ports_data[local_port]['clients'][client_key]
+                client_data['connection_count'] += 1
+                client_data['connections'].append({
+                    'connection_id': conn.get('connection_id', ''),
+                    'status': conn.get('status', 'Unknown'),
+                    'timestamp': conn.get('timestamp', '')
+                })
+                client_data['last_seen'] = conn.get('timestamp', '')
+                
+                # Update port totals
+                ports_data[local_port]['total_connections'] += 1
+            
+            # Calculate unique clients for each port
+            for port_data in ports_data.values():
+                port_data['unique_clients'] = len(port_data['clients'])
+            
+            # Sort ports by port number (custom ports)
+            sorted_ports = sorted(ports_data.items(), key=lambda x: int(x[0]) if x[0].isdigit() else 99999)
+            
+            # Convert to list format for easier frontend handling
+            ports_list = []
+            for port, port_data in sorted_ports:
+                # Sort clients by connection count
+                sorted_clients = sorted(port_data['clients'].items(), 
+                                      key=lambda x: x[1]['connection_count'], reverse=True)
+                
+                ports_list.append({
+                    'port': port_data['port'],
+                    'port_label': port_data['port_label'],
+                    'process_name': port_data['process_name'],
+                    'pid': port_data['pid'],
+                    'total_connections': port_data['total_connections'],
+                    'unique_clients': port_data['unique_clients'],
+                    'is_custom_port': True,
+                    'clients': [client_data for _, client_data in sorted_clients]
+                })
+            
+            return {
+                'timestamp': current_time.isoformat(),
+                'ports': ports_list,
+                'total_ports': len(ports_list),
+                'total_connections': sum(port['total_connections'] for port in ports_list),
+                'total_unique_clients': len(set(
+                    client['remote_ip'] for port in ports_list 
+                    for client in port['clients']
+                )),
+                'custom_ports_defined': list(custom_ports),
+                'active_custom_ports': [port['port'] for port in ports_list]
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting custom port clients: {e}")
+            return {
+                'timestamp': datetime.now().isoformat(),
+                'error': str(e),
+                'ports': [],
+                'total_ports': 0,
+                'total_connections': 0,
+                'total_unique_clients': 0,
+                'custom_ports_defined': [],
+                'active_custom_ports': []
             }
 
     def get_all_monitoring_data(self) -> Dict[str, Any]:

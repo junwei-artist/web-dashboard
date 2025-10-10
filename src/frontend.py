@@ -229,6 +229,30 @@ def get_proxy_detection():
     proxy_data = monitor.check_proxy_usage()
     return jsonify(proxy_data)
 
+@app.route('/api/network-connections')
+def get_network_connections():
+    """API endpoint to get all network connections across all ports."""
+    connections_data = monitor.monitor_network_connections()
+    return jsonify(connections_data)
+
+@app.route('/api/network-client-stats')
+def get_network_client_statistics():
+    """API endpoint to get network client statistics across all ports."""
+    stats_data = monitor.get_network_client_statistics()
+    return jsonify(stats_data)
+
+@app.route('/api/clients-by-port')
+def get_clients_by_port():
+    """API endpoint to get clients categorized by ports."""
+    clients_by_port_data = monitor.get_clients_by_port()
+    return jsonify(clients_by_port_data)
+
+@app.route('/api/custom-port-clients')
+def get_custom_port_clients():
+    """API endpoint to get clients for custom ports defined in port_labels.json."""
+    custom_port_clients_data = monitor.get_custom_port_clients()
+    return jsonify(custom_port_clients_data)
+
 @app.errorhandler(403)
 def forbidden(error):
     """Handle 403 (Forbidden) errors."""

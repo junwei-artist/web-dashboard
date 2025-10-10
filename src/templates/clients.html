@@ -7,120 +7,477 @@
     <div class="col-12">
         <h1 class="mb-4">
             <i class="fas fa-users me-2"></i>Client Monitor
-            <small class="text-muted">Monitor all clients accessing the server</small>
+            <small class="text-muted">Monitor all clients accessing the server and network connections</small>
         </h1>
     </div>
 </div>
 
-<!-- Statistics Cards -->
+<!-- Tab Navigation -->
 <div class="row mb-4">
-    <div class="col-md-3">
-        <div class="card bg-primary text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h4 class="card-title" id="active-clients-count">0</h4>
-                        <p class="card-text">Active Clients</p>
-                    </div>
-                    <div class="align-self-center">
-                        <i class="fas fa-user-check fa-2x"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card bg-success text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h4 class="card-title" id="total-clients-count">0</h4>
-                        <p class="card-text">Total Clients</p>
-                    </div>
-                    <div class="align-self-center">
-                        <i class="fas fa-users fa-2x"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card bg-info text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h4 class="card-title" id="unique-clients-24h">0</h4>
-                        <p class="card-text">Unique (24h)</p>
-                    </div>
-                    <div class="align-self-center">
-                        <i class="fas fa-calendar-day fa-2x"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card bg-warning text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h4 class="card-title" id="total-requests">0</h4>
-                        <p class="card-text">Total Requests</p>
-                    </div>
-                    <div class="align-self-center">
-                        <i class="fas fa-chart-line fa-2x"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
+    <div class="col-12">
+        <ul class="nav nav-tabs" id="clientTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="http-clients-tab" data-bs-toggle="tab" data-bs-target="#http-clients" type="button" role="tab">
+                    <i class="fas fa-users me-1"></i>All Clients
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="network-clients-tab" data-bs-toggle="tab" data-bs-target="#network-clients" type="button" role="tab">
+                    <i class="fas fa-network-wired me-1"></i>Network Connections
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="clients-by-port-tab" data-bs-toggle="tab" data-bs-target="#clients-by-port" type="button" role="tab">
+                    <i class="fas fa-plug me-1"></i>Clients by Port
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="custom-ports-tab" data-bs-toggle="tab" data-bs-target="#custom-ports" type="button" role="tab">
+                    <i class="fas fa-star me-1"></i>Custom Ports
+                </button>
+            </li>
+        </ul>
     </div>
 </div>
 
-<div class="row mb-3">
-    <div class="col-md-6">
-        <div class="input-group">
-            <span class="input-group-text"><i class="fas fa-search"></i></span>
-            <input type="text" class="form-control" id="client-search" placeholder="Search clients...">
-        </div>
-    </div>
-    <div class="col-md-6 text-end">
-        <button class="btn btn-outline-primary" onclick="refreshClients()">
-            <i class="fas fa-sync-alt me-1"></i>Refresh
-        </button>
-    </div>
-</div>
-
-<div class="row">
-    <div class="col-md-8">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="fas fa-list me-2"></i>Active Clients
-                    <span class="badge bg-primary ms-2" id="client-count">0</span>
-                </h5>
+<!-- Tab Content -->
+<div class="tab-content" id="clientTabsContent">
+    <!-- HTTP Clients Tab -->
+    <div class="tab-pane fade show active" id="http-clients" role="tabpanel">
+        <!-- HTTP Statistics Cards -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card bg-primary text-white">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h4 class="card-title" id="active-clients-count">0</h4>
+                                <p class="card-text">Active HTTP Clients</p>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-user-check fa-2x"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="card-body">
-                <div id="clients-container">
-                    <div class="text-center">
-                        <i class="fas fa-spinner fa-spin fa-2x"></i>
-                        <p class="mt-2">Loading clients...</p>
+            <div class="col-md-3">
+                <div class="card bg-success text-white">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h4 class="card-title" id="total-clients-count">0</h4>
+                                <p class="card-text">Total HTTP Clients</p>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-users fa-2x"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-info text-white">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h4 class="card-title" id="unique-clients-24h">0</h4>
+                                <p class="card-text">Unique (24h)</p>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-calendar-day fa-2x"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-warning text-white">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h4 class="card-title" id="total-requests">0</h4>
+                                <p class="card-text">Total Requests</p>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-chart-line fa-2x"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <div class="input-group">
+                    <span class="input-group-text"><i class="fas fa-search"></i></span>
+                    <input type="text" class="form-control" id="client-search" placeholder="Search HTTP clients...">
+                </div>
+            </div>
+            <div class="col-md-6 text-end">
+                <button class="btn btn-outline-primary" onclick="refreshClients()">
+                    <i class="fas fa-sync-alt me-1"></i>Refresh
+                </button>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-list me-2"></i>All Active Clients
+                            <span class="badge bg-primary ms-2" id="client-count">0</span>
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="clients-container">
+                            <div class="text-center">
+                                <i class="fas fa-spinner fa-spin fa-2x"></i>
+                                <p class="mt-2">Loading clients...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-chart-bar me-2"></i>Top Endpoints
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="top-endpoints">
+                            <div class="text-center">
+                                <i class="fas fa-spinner fa-spin"></i>
+                                <p class="mt-2">Loading...</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-    <div class="col-md-4">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="fas fa-chart-bar me-2"></i>Top Endpoints
-                </h5>
+
+    <!-- Network Clients Tab -->
+    <div class="tab-pane fade" id="network-clients" role="tabpanel">
+        <!-- Network Statistics Cards -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card bg-danger text-white">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h4 class="card-title" id="network-connections-count">0</h4>
+                                <p class="card-text">Active Connections</p>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-network-wired fa-2x"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="card-body">
-                <div id="top-endpoints">
-                    <div class="text-center">
-                        <i class="fas fa-spinner fa-spin"></i>
-                        <p class="mt-2">Loading...</p>
+            <div class="col-md-3">
+                <div class="card bg-info text-white">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h4 class="card-title" id="network-clients-count">0</h4>
+                                <p class="card-text">Unique Clients</p>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-users fa-2x"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-warning text-white">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h4 class="card-title" id="network-ports-count">0</h4>
+                                <p class="card-text">Active Ports</p>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-plug fa-2x"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-secondary text-white">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h4 class="card-title" id="network-processes-count">0</h4>
+                                <p class="card-text">Active Processes</p>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-cogs fa-2x"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <div class="input-group">
+                    <span class="input-group-text"><i class="fas fa-search"></i></span>
+                    <input type="text" class="form-control" id="network-search" placeholder="Search network clients...">
+                </div>
+            </div>
+            <div class="col-md-6 text-end">
+                <button class="btn btn-outline-primary" onclick="refreshNetworkClients()">
+                    <i class="fas fa-sync-alt me-1"></i>Refresh
+                </button>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-list me-2"></i>All Network Connections
+                            <span class="badge bg-danger ms-2" id="network-connection-count">0</span>
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="network-connections-container">
+                            <div class="text-center">
+                                <i class="fas fa-spinner fa-spin fa-2x"></i>
+                                <p class="mt-2">Loading network connections...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-chart-bar me-2"></i>Top Network Clients
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="top-network-clients">
+                            <div class="text-center">
+                                <i class="fas fa-spinner fa-spin"></i>
+                                <p class="mt-2">Loading...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Clients by Port Tab -->
+    <div class="tab-pane fade" id="clients-by-port" role="tabpanel">
+        <!-- Port Statistics Cards -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card bg-success text-white">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h4 class="card-title" id="ports-with-clients-count">0</h4>
+                                <p class="card-text">Active Ports</p>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-plug fa-2x"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-info text-white">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h4 class="card-title" id="total-port-connections-count">0</h4>
+                                <p class="card-text">Total Connections</p>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-link fa-2x"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-warning text-white">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h4 class="card-title" id="unique-port-clients-count">0</h4>
+                                <p class="card-text">Unique Clients</p>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-users fa-2x"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-secondary text-white">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h4 class="card-title" id="avg-clients-per-port">0</h4>
+                                <p class="card-text">Avg Clients/Port</p>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-calculator fa-2x"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <div class="input-group">
+                    <span class="input-group-text"><i class="fas fa-search"></i></span>
+                    <input type="text" class="form-control" id="port-search" placeholder="Search ports or clients...">
+                </div>
+            </div>
+            <div class="col-md-6 text-end">
+                <button class="btn btn-outline-primary" onclick="refreshClientsByPort()">
+                    <i class="fas fa-sync-alt me-1"></i>Refresh
+                </button>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-list me-2"></i>Clients by Port
+                            <span class="badge bg-success ms-2" id="ports-count">0</span>
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="clients-by-port-container">
+                            <div class="text-center">
+                                <i class="fas fa-spinner fa-spin fa-2x"></i>
+                                <p class="mt-2">Loading clients by port...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Ports Tab -->
+    <div class="tab-pane fade" id="custom-ports" role="tabpanel">
+        <!-- Custom Port Statistics Cards -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card bg-warning text-white">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h4 class="card-title" id="custom-ports-defined-count">0</h4>
+                                <p class="card-text">Custom Ports Defined</p>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-star fa-2x"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-success text-white">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h4 class="card-title" id="custom-ports-active-count">0</h4>
+                                <p class="card-text">Active Custom Ports</p>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-check-circle fa-2x"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-info text-white">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h4 class="card-title" id="custom-ports-connections-count">0</h4>
+                                <p class="card-text">Total Connections</p>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-link fa-2x"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-primary text-white">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h4 class="card-title" id="custom-ports-clients-count">0</h4>
+                                <p class="card-text">Unique Clients</p>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-users fa-2x"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <div class="input-group">
+                    <span class="input-group-text"><i class="fas fa-search"></i></span>
+                    <input type="text" class="form-control" id="custom-port-search" placeholder="Search custom ports or clients...">
+                </div>
+            </div>
+            <div class="col-md-6 text-end">
+                <button class="btn btn-outline-primary" onclick="refreshCustomPorts()">
+                    <i class="fas fa-sync-alt me-1"></i>Refresh
+                </button>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-star me-2"></i>Custom Ports (from port_labels.json)
+                            <span class="badge bg-warning ms-2" id="custom-ports-count">0</span>
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="custom-ports-container">
+                            <div class="text-center">
+                                <i class="fas fa-spinner fa-spin fa-2x"></i>
+                                <p class="mt-2">Loading custom ports...</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -153,15 +510,60 @@
 <script>
 let allClients = [];
 let clientStats = {};
+let allNetworkConnections = [];
+let networkStats = {};
+let clientsByPortData = {};
+let customPortsData = {};
+
+function convertNetworkConnectionsToClients(connections) {
+    // Convert network connections to client format for the HTTP clients tab
+    const clientMap = {};
+    
+    connections.forEach(conn => {
+        const clientIp = conn.remote_ip;
+        const clientKey = `${clientIp}:${conn.remote_port}`;
+        
+        if (!clientMap[clientKey]) {
+            clientMap[clientKey] = {
+                client_ip: clientIp,
+                user_agent: 'Network Client',
+                request_count: 0,
+                endpoint_count: 0,
+                endpoints: [],
+                last_seen: conn.timestamp,
+                time_since_last_seen: '0:00:00',
+                is_active: true,
+                remote_port: conn.remote_port,
+                local_address: conn.local_address,
+                port_label: conn.port_label,
+                process_name: conn.process_name,
+                status: conn.status
+            };
+        }
+        
+        clientMap[clientKey].request_count++;
+        clientMap[clientKey].endpoints.push(conn.local_address);
+        clientMap[clientKey].endpoint_count = clientMap[clientKey].endpoints.length;
+        
+        // Update last seen if this connection is more recent
+        if (new Date(conn.timestamp) > new Date(clientMap[clientKey].last_seen)) {
+            clientMap[clientKey].last_seen = conn.timestamp;
+        }
+    });
+    
+    return Object.values(clientMap);
+}
 
 function refreshClients() {
     showLoading('clients-container');
     
-    // Fetch clients and stats in parallel
+    // Fetch network connections and stats in parallel (same as network clients tab)
     Promise.all([
-        fetch('/api/clients').then(response => response.json()),
-        fetch('/api/client-stats').then(response => response.json())
-    ]).then(([clients, stats]) => {
+        fetch('/api/network-connections').then(response => response.json()),
+        fetch('/api/network-client-stats').then(response => response.json())
+    ]).then(([connections, stats]) => {
+        // Convert network connections to client format for display
+        const clients = convertNetworkConnectionsToClients(connections.active_connections || []);
         allClients = clients;
         clientStats = stats;
         displayClients(clients);
@@ -170,6 +572,25 @@ function refreshClients() {
     }).catch(error => {
         console.error('Error fetching client data:', error);
         showError('clients-container', 'Failed to load client data');
+    });
+}
+
+function refreshNetworkClients() {
+    showLoading('network-connections-container');
+    
+    // Fetch network connections and stats in parallel
+    Promise.all([
+        fetch('/api/network-connections').then(response => response.json()),
+        fetch('/api/network-client-stats').then(response => response.json())
+    ]).then(([connections, stats]) => {
+        allNetworkConnections = connections.active_connections || [];
+        networkStats = stats;
+        displayNetworkConnections(allNetworkConnections);
+        updateNetworkStatistics(stats);
+        document.getElementById('network-connection-count').textContent = allNetworkConnections.length;
+    }).catch(error => {
+        console.error('Error fetching network data:', error);
+        showError('network-connections-container', 'Failed to load network data');
     });
 }
 
@@ -189,19 +610,21 @@ function displayClients(clients) {
                         <th onclick="sortClients('client_ip')" style="cursor: pointer;">
                             Client IP <i class="fas fa-sort"></i>
                         </th>
-                        <th onclick="sortClients('user_agent')" style="cursor: pointer;">
-                            User Agent <i class="fas fa-sort"></i>
+                        <th onclick="sortClients('remote_port')" style="cursor: pointer;">
+                            Remote Port <i class="fas fa-sort"></i>
+                        </th>
+                        <th onclick="sortClients('local_address')" style="cursor: pointer;">
+                            Local Address <i class="fas fa-sort"></i>
+                        </th>
+                        <th onclick="sortClients('port_label')" style="cursor: pointer;">
+                            Service <i class="fas fa-sort"></i>
                         </th>
                         <th onclick="sortClients('request_count')" style="cursor: pointer;">
-                            Requests <i class="fas fa-sort"></i>
+                            Connections <i class="fas fa-sort"></i>
                         </th>
-                        <th onclick="sortClients('endpoint_count')" style="cursor: pointer;">
-                            Endpoints <i class="fas fa-sort"></i>
+                        <th onclick="sortClients('status')" style="cursor: pointer;">
+                            Status <i class="fas fa-sort"></i>
                         </th>
-                        <th onclick="sortClients('last_seen')" style="cursor: pointer;">
-                            Last Seen <i class="fas fa-sort"></i>
-                        </th>
-                        <th>Status</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -209,32 +632,30 @@ function displayClients(clients) {
     `;
     
     clients.forEach(client => {
-        const isActive = client.is_active;
-        const statusClass = isActive ? 'success' : 'secondary';
-        const statusText = isActive ? 'Active' : 'Inactive';
+        const statusClass = getConnectionStatusClass(client.status);
         
         html += `
             <tr>
                 <td>
-                    <code>${client.client_ip}</code>
+                    <code>${client.remote_ip_formatted || client.client_ip}</code>
                 </td>
                 <td>
-                    <small>${truncateText(client.user_agent, 50)}</small>
+                    <span class="badge bg-secondary">${client.remote_port}</span>
                 </td>
                 <td>
-                    <span class="badge bg-info">${client.request_count}</span>
+                    <code>${client.local_address}</code>
                 </td>
                 <td>
-                    <span class="badge bg-secondary">${client.endpoint_count}</span>
+                    <span class="badge bg-info">${client.port_label}</span>
                 </td>
                 <td>
-                    <small>${formatTimeAgo(client.time_since_last_seen)}</small>
+                    <span class="badge bg-primary">${client.request_count}</span>
                 </td>
                 <td>
-                    <span class="badge bg-${statusClass}">${statusText}</span>
+                    <span class="badge bg-${statusClass}">${client.status}</span>
                 </td>
                 <td>
-                    <button class="btn btn-sm btn-outline-primary" onclick="showClientDetails('${client.client_ip}')">
+                    <button class="btn btn-sm btn-outline-primary" onclick="showNetworkClientDetails('${client.client_ip}', '${client.remote_port}')">
                         <i class="fas fa-eye"></i> Details
                     </button>
                 </td>
@@ -319,6 +740,76 @@ function showClientDetails(clientIp) {
         });
 }
 
+function showNetworkClientDetails(clientIp, remotePort) {
+    const modal = new bootstrap.Modal(document.getElementById('clientModal'));
+    const detailsContainer = document.getElementById('client-details');
+    
+    // Find the client in our current data
+    const client = allClients.find(c => c.client_ip === clientIp && c.remote_port === remotePort);
+    
+    if (!client) {
+        detailsContainer.innerHTML = '<p class="text-danger">Client details not found</p>';
+        modal.show();
+        return;
+    }
+    
+    let html = `
+        <h6>Network Client Details</h6>
+        <hr>
+        <div class="row">
+            <div class="col-md-6">
+                <h6>Client Information</h6>
+                <table class="table table-sm">
+                    <tr><td><strong>Client IP:</strong></td><td><code>${client.client_ip}</code></td></tr>
+                    <tr><td><strong>Remote Port:</strong></td><td>${client.remote_port}</td></tr>
+                    <tr><td><strong>Connections:</strong></td><td><span class="badge bg-primary">${client.request_count}</span></td></tr>
+                    <tr><td><strong>Status:</strong></td><td><span class="badge bg-${getConnectionStatusClass(client.status)}">${client.status}</span></td></tr>
+                    <tr><td><strong>Last Seen:</strong></td><td>${formatTimestamp(client.last_seen)}</td></tr>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <h6>Connection Information</h6>
+                <table class="table table-sm">
+                    <tr><td><strong>Local Address:</strong></td><td><code>${client.local_address}</code></td></tr>
+                    <tr><td><strong>Service:</strong></td><td><span class="badge bg-info">${client.port_label}</span></td></tr>
+                    <tr><td><strong>Process:</strong></td><td>${client.process_name}</td></tr>
+                    <tr><td><strong>Endpoints:</strong></td><td><span class="badge bg-secondary">${client.endpoint_count}</span></td></tr>
+                </table>
+            </div>
+        </div>
+    `;
+    
+    if (client.endpoints && client.endpoints.length > 0) {
+        html += `
+            <hr>
+            <h6>Connected Endpoints</h6>
+            <div class="table-responsive">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Local Address</th>
+                            <th>Service</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+        
+        client.endpoints.forEach(endpoint => {
+            html += `
+                <tr>
+                    <td><code>${endpoint}</code></td>
+                    <td><span class="badge bg-info">${client.port_label}</span></td>
+                </tr>
+            `;
+        });
+        
+        html += '</tbody></table></div>';
+    }
+    
+    detailsContainer.innerHTML = html;
+    modal.show();
+}
+
 function sortClients(column) {
     allClients.sort((a, b) => {
         if (column === 'client_ip') {
@@ -378,13 +869,625 @@ function showError(containerId, message) {
     `;
 }
 
+function displayNetworkConnections(connections) {
+    const container = document.getElementById('network-connections-container');
+    
+    if (!connections || connections.length === 0) {
+        container.innerHTML = '<p class="text-muted text-center">No active network connections found</p>';
+        return;
+    }
+    
+    let html = `
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-dark">
+                    <tr>
+                        <th onclick="sortNetworkConnections('remote_ip')" style="cursor: pointer;">
+                            Client IP <i class="fas fa-sort"></i>
+                        </th>
+                        <th onclick="sortNetworkConnections('local_address')" style="cursor: pointer;">
+                            Local Address <i class="fas fa-sort"></i>
+                        </th>
+                        <th onclick="sortNetworkConnections('port_label')" style="cursor: pointer;">
+                            Service <i class="fas fa-sort"></i>
+                        </th>
+                        <th onclick="sortNetworkConnections('process_name')" style="cursor: pointer;">
+                            Process <i class="fas fa-sort"></i>
+                        </th>
+                        <th onclick="sortNetworkConnections('status')" style="cursor: pointer;">
+                            Status <i class="fas fa-sort"></i>
+                        </th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    connections.forEach(conn => {
+        const statusClass = getConnectionStatusClass(conn.status);
+        
+        html += `
+            <tr>
+                <td>
+                    <code>${conn.remote_ip_formatted || conn.remote_ip}</code>
+                    <br><small class="text-muted">Port: ${conn.remote_port}</small>
+                </td>
+                <td>
+                    <code>${conn.local_address}</code>
+                </td>
+                <td>
+                    <span class="badge bg-info">${conn.port_label}</span>
+                </td>
+                <td>
+                    <small>${conn.process_name}</small>
+                    ${conn.pid !== 'N/A' ? `<br><small class="text-muted">PID: ${conn.pid}</small>` : ''}
+                </td>
+                <td>
+                    <span class="badge bg-${statusClass}">${conn.status}</span>
+                </td>
+                <td>
+                    <button class="btn btn-sm btn-outline-primary" onclick="showNetworkConnectionDetails('${conn.connection_id}')">
+                        <i class="fas fa-eye"></i> Details
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+    
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+}
+
+function updateNetworkStatistics(stats) {
+    document.getElementById('network-connections-count').textContent = stats.total_active_connections || 0;
+    document.getElementById('network-clients-count').textContent = stats.unique_clients || 0;
+    document.getElementById('network-ports-count').textContent = stats.active_ports || 0;
+    document.getElementById('network-processes-count').textContent = stats.active_processes || 0;
+    
+    // Update top network clients
+    const clientsContainer = document.getElementById('top-network-clients');
+    if (stats.top_clients && stats.top_clients.length > 0) {
+        let html = '<div class="list-group list-group-flush">';
+        stats.top_clients.forEach(([clientIp, clientData]) => {
+            html += `
+                <div class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                        <code>${clientIp}</code>
+                        <br><small class="text-muted">${clientData.ports_accessed} ports, ${clientData.processes_accessed} processes</small>
+                    </div>
+                    <span class="badge bg-primary rounded-pill">${clientData.connection_count}</span>
+                </div>
+            `;
+        });
+        html += '</div>';
+        clientsContainer.innerHTML = html;
+    } else {
+        clientsContainer.innerHTML = '<p class="text-muted text-center">No network clients data available</p>';
+    }
+}
+
+function getConnectionStatusClass(status) {
+    switch(status) {
+        case 'ESTABLISHED': return 'success';
+        case 'TIME_WAIT': return 'warning';
+        case 'CLOSE_WAIT': return 'info';
+        case 'FIN_WAIT1':
+        case 'FIN_WAIT2': return 'secondary';
+        default: return 'secondary';
+    }
+}
+
+function sortNetworkConnections(column) {
+    allNetworkConnections.sort((a, b) => {
+        if (column === 'remote_ip' || column === 'local_address') {
+            return a[column].localeCompare(b[column]);
+        } else {
+            return a[column].localeCompare(b[column]);
+        }
+    });
+    displayNetworkConnections(allNetworkConnections);
+}
+
+function filterNetworkConnections() {
+    const searchTerm = document.getElementById('network-search').value.toLowerCase();
+    const filteredConnections = allNetworkConnections.filter(conn => 
+        conn.remote_ip.toLowerCase().includes(searchTerm) ||
+        conn.local_address.toLowerCase().includes(searchTerm) ||
+        conn.process_name.toLowerCase().includes(searchTerm) ||
+        conn.port_label.toLowerCase().includes(searchTerm)
+    );
+    displayNetworkConnections(filteredConnections);
+    document.getElementById('network-connection-count').textContent = filteredConnections.length;
+}
+
+function showNetworkConnectionDetails(connectionId) {
+    const connection = allNetworkConnections.find(conn => conn.connection_id === connectionId);
+    if (!connection) return;
+    
+    const modal = new bootstrap.Modal(document.getElementById('clientModal'));
+    const detailsContainer = document.getElementById('client-details');
+    
+    let html = `
+        <h6>Network Connection Details</h6>
+        <hr>
+        <div class="row">
+            <div class="col-md-6">
+                <h6>Connection Info</h6>
+                <table class="table table-sm">
+                    <tr><td><strong>Connection ID:</strong></td><td><code>${connection.connection_id}</code></td></tr>
+                    <tr><td><strong>Local Address:</strong></td><td><code>${connection.local_address}</code></td></tr>
+                    <tr><td><strong>Remote Address:</strong></td><td><code>${connection.remote_address}</code></td></tr>
+                    <tr><td><strong>Status:</strong></td><td><span class="badge bg-${getConnectionStatusClass(connection.status)}">${connection.status}</span></td></tr>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <h6>Process Info</h6>
+                <table class="table table-sm">
+                    <tr><td><strong>Process Name:</strong></td><td>${connection.process_name}</td></tr>
+                    <tr><td><strong>PID:</strong></td><td>${connection.pid}</td></tr>
+                    <tr><td><strong>Service:</strong></td><td><span class="badge bg-info">${connection.port_label}</span></td></tr>
+                    <tr><td><strong>Timestamp:</strong></td><td>${formatTimestamp(connection.timestamp)}</td></tr>
+                </table>
+            </div>
+        </div>
+    `;
+    
+    detailsContainer.innerHTML = html;
+    modal.show();
+}
+
+function refreshClientsByPort() {
+    showLoading('clients-by-port-container');
+    
+    fetch('/api/clients-by-port')
+        .then(response => response.json())
+        .then(data => {
+            clientsByPortData = data;
+            displayClientsByPort(data.ports || []);
+            updatePortStatistics(data);
+            document.getElementById('ports-count').textContent = data.total_ports || 0;
+        })
+        .catch(error => {
+            console.error('Error fetching clients by port data:', error);
+            showError('clients-by-port-container', 'Failed to load clients by port data');
+        });
+}
+
+function displayClientsByPort(ports) {
+    const container = document.getElementById('clients-by-port-container');
+    
+    if (!ports || ports.length === 0) {
+        container.innerHTML = '<p class="text-muted text-center">No active ports with clients found</p>';
+        return;
+    }
+    
+    let html = '';
+    
+    ports.forEach(port => {
+        const portClass = getPortClass(port.port);
+        
+        html += `
+            <div class="card mb-3">
+                <div class="card-header bg-${portClass} text-white">
+                    <div class="row align-items-center">
+                        <div class="col-md-6">
+                            <h6 class="mb-0">
+                                <i class="fas fa-plug me-2"></i>Port ${port.port}
+                                <span class="badge bg-light text-dark ms-2">${port.port_label}</span>
+                            </h6>
+                        </div>
+                        <div class="col-md-6 text-end">
+                            <span class="badge bg-light text-dark me-2">${port.total_connections} connections</span>
+                            <span class="badge bg-light text-dark">${port.unique_clients} clients</span>
+                        </div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-md-6">
+                            <small><i class="fas fa-cog me-1"></i>Process: ${port.process_name}</small>
+                            ${port.pid !== 'N/A' ? `<br><small><i class="fas fa-hashtag me-1"></i>PID: ${port.pid}</small>` : ''}
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+        `;
+        
+        if (port.clients && port.clients.length > 0) {
+            html += `
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Client IP</th>
+                                <th>Remote Port</th>
+                                <th>Connections</th>
+                                <th>Status</th>
+                                <th>Last Seen</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            
+            port.clients.forEach(client => {
+                const statusClass = getConnectionStatusClass(client.status);
+                html += `
+                    <tr>
+                        <td><code>${client.remote_ip}</code></td>
+                        <td><span class="badge bg-secondary">${client.remote_port}</span></td>
+                        <td><span class="badge bg-primary">${client.connection_count}</span></td>
+                        <td><span class="badge bg-${statusClass}">${client.status}</span></td>
+                        <td><small>${formatTimestamp(client.last_seen)}</small></td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary" onclick="showPortClientDetails('${port.port}', '${client.remote_ip}')">
+                                <i class="fas fa-eye"></i> Details
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            html += '</tbody></table></div>';
+        } else {
+            html += '<p class="text-muted text-center">No clients connected to this port</p>';
+        }
+        
+        html += '</div></div>';
+    });
+    
+    container.innerHTML = html;
+}
+
+function updatePortStatistics(data) {
+    document.getElementById('ports-with-clients-count').textContent = data.total_ports || 0;
+    document.getElementById('total-port-connections-count').textContent = data.total_connections || 0;
+    document.getElementById('unique-port-clients-count').textContent = data.total_unique_clients || 0;
+    
+    const avgClients = data.total_ports > 0 ? (data.total_unique_clients / data.total_ports).toFixed(1) : 0;
+    document.getElementById('avg-clients-per-port').textContent = avgClients;
+}
+
+function getPortClass(port) {
+    // Color code ports by type
+    const portNum = parseInt(port);
+    if (portNum >= 1 && portNum <= 1023) return 'danger'; // Well-known ports
+    if (portNum >= 1024 && portNum <= 49151) return 'warning'; // Registered ports
+    if (portNum >= 49152 && portNum <= 65535) return 'info'; // Dynamic/private ports
+    return 'secondary'; // Unknown
+}
+
+function filterClientsByPort() {
+    const searchTerm = document.getElementById('port-search').value.toLowerCase();
+    const ports = clientsByPortData.ports || [];
+    
+    if (!searchTerm) {
+        displayClientsByPort(ports);
+        document.getElementById('ports-count').textContent = ports.length;
+        return;
+    }
+    
+    const filteredPorts = ports.filter(port => {
+        // Search in port number, label, process name, or client IPs
+        const portMatch = port.port.toLowerCase().includes(searchTerm) ||
+                         port.port_label.toLowerCase().includes(searchTerm) ||
+                         port.process_name.toLowerCase().includes(searchTerm);
+        
+        if (portMatch) return true;
+        
+        // Search in client IPs
+        const clientMatch = port.clients.some(client => 
+            client.remote_ip.toLowerCase().includes(searchTerm)
+        );
+        
+        return clientMatch;
+    });
+    
+    displayClientsByPort(filteredPorts);
+    document.getElementById('ports-count').textContent = filteredPorts.length;
+}
+
+function showPortClientDetails(port, clientIp) {
+    const portData = clientsByPortData.ports?.find(p => p.port === port);
+    const clientData = portData?.clients?.find(c => c.remote_ip === clientIp);
+    
+    if (!clientData) return;
+    
+    const modal = new bootstrap.Modal(document.getElementById('clientModal'));
+    const detailsContainer = document.getElementById('client-details');
+    
+    let html = `
+        <h6>Client Details for Port ${port}</h6>
+        <hr>
+        <div class="row">
+            <div class="col-md-6">
+                <h6>Port Information</h6>
+                <table class="table table-sm">
+                    <tr><td><strong>Port:</strong></td><td><code>${port}</code></td></tr>
+                    <tr><td><strong>Service:</strong></td><td><span class="badge bg-info">${portData.port_label}</span></td></tr>
+                    <tr><td><strong>Process:</strong></td><td>${portData.process_name}</td></tr>
+                    <tr><td><strong>PID:</strong></td><td>${portData.pid}</td></tr>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <h6>Client Information</h6>
+                <table class="table table-sm">
+                    <tr><td><strong>Client IP:</strong></td><td><code>${clientData.remote_ip}</code></td></tr>
+                    <tr><td><strong>Remote Port:</strong></td><td>${clientData.remote_port}</td></tr>
+                    <tr><td><strong>Connections:</strong></td><td><span class="badge bg-primary">${clientData.connection_count}</span></td></tr>
+                    <tr><td><strong>Status:</strong></td><td><span class="badge bg-${getConnectionStatusClass(clientData.status)}">${clientData.status}</span></td></tr>
+                    <tr><td><strong>Last Seen:</strong></td><td>${formatTimestamp(clientData.last_seen)}</td></tr>
+                </table>
+            </div>
+        </div>
+    `;
+    
+    if (clientData.connections && clientData.connections.length > 0) {
+        html += `
+            <hr>
+            <h6>Connection History</h6>
+            <div class="table-responsive">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Connection ID</th>
+                            <th>Status</th>
+                            <th>Timestamp</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+        
+        clientData.connections.forEach(conn => {
+            html += `
+                <tr>
+                    <td><code>${conn.connection_id}</code></td>
+                    <td><span class="badge bg-${getConnectionStatusClass(conn.status)}">${conn.status}</span></td>
+                    <td><small>${formatTimestamp(conn.timestamp)}</small></td>
+                </tr>
+            `;
+        });
+        
+        html += '</tbody></table></div>';
+    }
+    
+    detailsContainer.innerHTML = html;
+    modal.show();
+}
+
+function refreshCustomPorts() {
+    showLoading('custom-ports-container');
+    
+    fetch('/api/custom-port-clients')
+        .then(response => response.json())
+        .then(data => {
+            customPortsData = data;
+            displayCustomPorts(data.ports || []);
+            updateCustomPortStatistics(data);
+            document.getElementById('custom-ports-count').textContent = data.total_ports || 0;
+        })
+        .catch(error => {
+            console.error('Error fetching custom port data:', error);
+            showError('custom-ports-container', 'Failed to load custom port data');
+        });
+}
+
+function displayCustomPorts(ports) {
+    const container = document.getElementById('custom-ports-container');
+    
+    if (!ports || ports.length === 0) {
+        container.innerHTML = `
+            <div class="text-center">
+                <i class="fas fa-star fa-3x text-muted mb-3"></i>
+                <h5 class="text-muted">No Active Custom Ports</h5>
+                <p class="text-muted">No clients are currently accessing your custom ports defined in port_labels.json</p>
+                <div class="mt-3">
+                    <h6>Custom Ports Defined:</h6>
+                    <div class="d-flex flex-wrap gap-2 justify-content-center">
+                        ${customPortsData.custom_ports_defined ? customPortsData.custom_ports_defined.map(port => 
+                            `<span class="badge bg-secondary">${port}</span>`
+                        ).join('') : '<span class="text-muted">None</span>'}
+                    </div>
+                </div>
+            </div>
+        `;
+        return;
+    }
+    
+    let html = '';
+    
+    ports.forEach(port => {
+        html += `
+            <div class="card mb-3 border-warning">
+                <div class="card-header bg-warning text-dark">
+                    <div class="row align-items-center">
+                        <div class="col-md-6">
+                            <h6 class="mb-0">
+                                <i class="fas fa-star me-2"></i>Port ${port.port}
+                                <span class="badge bg-dark ms-2">${port.port_label}</span>
+                            </h6>
+                        </div>
+                        <div class="col-md-6 text-end">
+                            <span class="badge bg-dark me-2">${port.total_connections} connections</span>
+                            <span class="badge bg-dark">${port.unique_clients} clients</span>
+                        </div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-md-6">
+                            <small><i class="fas fa-cog me-1"></i>Process: ${port.process_name}</small>
+                            ${port.pid !== 'N/A' ? `<br><small><i class="fas fa-hashtag me-1"></i>PID: ${port.pid}</small>` : ''}
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+        `;
+        
+        if (port.clients && port.clients.length > 0) {
+            html += `
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Client IP</th>
+                                <th>Remote Port</th>
+                                <th>Connections</th>
+                                <th>Status</th>
+                                <th>Last Seen</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            
+            port.clients.forEach(client => {
+                const statusClass = getConnectionStatusClass(client.status);
+                html += `
+                    <tr>
+                        <td><code>${client.remote_ip}</code></td>
+                        <td><span class="badge bg-secondary">${client.remote_port}</span></td>
+                        <td><span class="badge bg-primary">${client.connection_count}</span></td>
+                        <td><span class="badge bg-${statusClass}">${client.status}</span></td>
+                        <td><small>${formatTimestamp(client.last_seen)}</small></td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary" onclick="showCustomPortClientDetails('${port.port}', '${client.remote_ip}')">
+                                <i class="fas fa-eye"></i> Details
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            html += '</tbody></table></div>';
+        } else {
+            html += '<p class="text-muted text-center">No clients connected to this custom port</p>';
+        }
+        
+        html += '</div></div>';
+    });
+    
+    container.innerHTML = html;
+}
+
+function updateCustomPortStatistics(data) {
+    document.getElementById('custom-ports-defined-count').textContent = data.custom_ports_defined ? data.custom_ports_defined.length : 0;
+    document.getElementById('custom-ports-active-count').textContent = data.total_ports || 0;
+    document.getElementById('custom-ports-connections-count').textContent = data.total_connections || 0;
+    document.getElementById('custom-ports-clients-count').textContent = data.total_unique_clients || 0;
+}
+
+function filterCustomPorts() {
+    const searchTerm = document.getElementById('custom-port-search').value.toLowerCase();
+    const ports = customPortsData.ports || [];
+    
+    if (!searchTerm) {
+        displayCustomPorts(ports);
+        document.getElementById('custom-ports-count').textContent = ports.length;
+        return;
+    }
+    
+    const filteredPorts = ports.filter(port => {
+        // Search in port number, label, process name, or client IPs
+        const portMatch = port.port.toLowerCase().includes(searchTerm) ||
+                         port.port_label.toLowerCase().includes(searchTerm) ||
+                         port.process_name.toLowerCase().includes(searchTerm);
+        
+        if (portMatch) return true;
+        
+        // Search in client IPs
+        const clientMatch = port.clients.some(client => 
+            client.remote_ip.toLowerCase().includes(searchTerm)
+        );
+        
+        return clientMatch;
+    });
+    
+    displayCustomPorts(filteredPorts);
+    document.getElementById('custom-ports-count').textContent = filteredPorts.length;
+}
+
+function showCustomPortClientDetails(port, clientIp) {
+    const portData = customPortsData.ports?.find(p => p.port === port);
+    const clientData = portData?.clients?.find(c => c.remote_ip === clientIp);
+    
+    if (!clientData) return;
+    
+    const modal = new bootstrap.Modal(document.getElementById('clientModal'));
+    const detailsContainer = document.getElementById('client-details');
+    
+    let html = `
+        <h6>Custom Port Client Details</h6>
+        <hr>
+        <div class="row">
+            <div class="col-md-6">
+                <h6>Custom Port Information</h6>
+                <table class="table table-sm">
+                    <tr><td><strong>Port:</strong></td><td><code>${port}</code></td></tr>
+                    <tr><td><strong>Service:</strong></td><td><span class="badge bg-warning text-dark">${portData.port_label}</span></td></tr>
+                    <tr><td><strong>Process:</strong></td><td>${portData.process_name}</td></tr>
+                    <tr><td><strong>PID:</strong></td><td>${portData.pid}</td></tr>
+                    <tr><td><strong>Type:</strong></td><td><span class="badge bg-warning text-dark">Custom Port</span></td></tr>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <h6>Client Information</h6>
+                <table class="table table-sm">
+                    <tr><td><strong>Client IP:</strong></td><td><code>${clientData.remote_ip}</code></td></tr>
+                    <tr><td><strong>Remote Port:</strong></td><td>${clientData.remote_port}</td></tr>
+                    <tr><td><strong>Connections:</strong></td><td><span class="badge bg-primary">${clientData.connection_count}</span></td></tr>
+                    <tr><td><strong>Status:</strong></td><td><span class="badge bg-${getConnectionStatusClass(clientData.status)}">${clientData.status}</span></td></tr>
+                    <tr><td><strong>Last Seen:</strong></td><td>${formatTimestamp(clientData.last_seen)}</td></tr>
+                </table>
+            </div>
+        </div>
+    `;
+    
+    if (clientData.connections && clientData.connections.length > 0) {
+        html += `
+            <hr>
+            <h6>Connection History</h6>
+            <div class="table-responsive">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Connection ID</th>
+                            <th>Status</th>
+                            <th>Timestamp</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+        
+        clientData.connections.forEach(conn => {
+            html += `
+                <tr>
+                    <td><code>${conn.connection_id}</code></td>
+                    <td><span class="badge bg-${getConnectionStatusClass(conn.status)}">${conn.status}</span></td>
+                    <td><small>${formatTimestamp(conn.timestamp)}</small></td>
+                </tr>
+            `;
+        });
+        
+        html += '</tbody></table></div>';
+    }
+    
+    detailsContainer.innerHTML = html;
+    modal.show();
+}
+
 // Event listeners
 document.getElementById('client-search').addEventListener('input', filterClients);
+document.getElementById('network-search').addEventListener('input', filterNetworkConnections);
+document.getElementById('port-search').addEventListener('input', filterClientsByPort);
+document.getElementById('custom-port-search').addEventListener('input', filterCustomPorts);
 
 // Initial load
 refreshClients();
+refreshNetworkClients();
+refreshClientsByPort();
+refreshCustomPorts();
 
 // Auto-refresh every 30 seconds
 setInterval(refreshClients, 30000);
+setInterval(refreshNetworkClients, 30000);
+setInterval(refreshClientsByPort, 30000);
+setInterval(refreshCustomPorts, 30000);
 </script>
 {% endblock %}
