@@ -1,0 +1,10 @@
+{
+  "admin": {
+    "password_hash": "5743908502276289be8ffc63aafb7d6bd4dbda7bba2176b85c02e97c8cf54a61",
+    "role": "admin"
+  },
+  "viewer": {
+    "password_hash": "65375049b9e4d7cad6c9ba286fdeb9394b28135a3e84136404cfccfdcc438894",
+    "role": "viewer"
+  }
+}

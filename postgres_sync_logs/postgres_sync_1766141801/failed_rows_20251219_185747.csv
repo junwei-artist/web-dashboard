@@ -1,0 +1,3 @@
+timestamp,table_name,row_id,error,row_data
+2025-12-19T18:59:25.204631,project_member,629f9831-bae9-4cd4-a5b7-296524d62eab,Failed to insert row 629f9831-bae9-4cd4-a5b7-296524d62eab into source,"{""project_id"": ""629f9831-bae9-4cd4-a5b7-296524d62eab"", ""user_id"": ""9c20156b-fe11-43d3-85f0-ae43f618bf7f"", ""role"": ""OWNER"", ""role_id"": ""00000000-0000-0000-0000-000000000001""}"
+2025-12-19T19:02:01.448752,project_member,431e1010-7b0f-453e-bf19-b8eb4cc13d73,Failed to insert row 431e1010-7b0f-453e-bf19-b8eb4cc13d73 into target,"{""project_id"": ""431e1010-7b0f-453e-bf19-b8eb4cc13d73"", ""user_id"": ""05f4365e-c4b9-4c49-85fc-fd46d2805d4c"", ""role"": ""OWNER"", ""role_id"": ""00000000-0000-0000-0000-000000000001""}"

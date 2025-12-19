@@ -10,7 +10,7 @@ import argparse
 # Add src directory to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
-from src.frontend import app, start_background_monitoring
+from src.frontend import app, socketio, start_background_monitoring
 from src.backend import SystemMonitor
 from src.config_manager import ConfigManager
 
@@ -49,7 +49,7 @@ def main():
     print(f"Dashboard will be available at: http://localhost:{args.port}")
     print("Press Ctrl+C to stop the server")
     
-    app.run(debug=args.debug, host=args.host, port=args.port)
+    socketio.run(app, debug=args.debug, host=args.host, port=args.port)
 
 if __name__ == '__main__':
     main()

@@ -4,9 +4,14 @@ Frontend web application for system monitoring dashboard.
 Provides web interface for monitoring services, ports, and databases.
 """
 
-from flask import Flask, render_template, jsonify, request, abort
+from flask import Flask, render_template, jsonify, request, abort, redirect, url_for, flash
+from flask_socketio import SocketIO, emit
+from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from backend import SystemMonitor
 from config_manager import ConfigManager
+from rsync_manager import RsyncManager
+from postgres_sync_manager import PostgresSyncManager
+from auth import auth_manager, login_manager, can_edit_required
 import logging
 import json
 import threading
@@ -14,12 +19,24 @@ import time
 from datetime import datetime
 
 app = Flask(__name__)
+app.config['SECRET_KEY'] = 'your-secret-key-here-change-in-production'
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+
+# Initialize login manager
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+login_manager.login_message = 'Please log in to access this page.'
+
 monitor = SystemMonitor()
 config_manager = ConfigManager()
+rsync_manager = RsyncManager()
+postgres_sync_manager = PostgresSyncManager()
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+# Set rsync_manager logger to DEBUG
+logging.getLogger('rsync_manager').setLevel(logging.DEBUG)
 
 # Global variable to store latest monitoring data
 latest_data = {}
@@ -55,8 +72,25 @@ def check_ip_access():
 
 @app.before_request
 def before_request():
-    """Check IP access before processing any request."""
+    """Check IP access and authentication before processing any request."""
+    # Skip IP check and authentication for static files
+    if request.path.startswith('/static'):
+        return
+    
+    # Skip authentication for login page (but still check IP)
+    if request.endpoint == 'login':
+        check_ip_access()
+        return
+    
+    # Check IP access for all other routes
     check_ip_access()
+    
+    # Require login for all other routes
+    if not current_user.is_authenticated:
+        if request.endpoint and not request.endpoint.startswith('api'):
+            return redirect(url_for('login', next=request.url))
+        elif request.endpoint and request.endpoint.startswith('api'):
+            return jsonify({'error': 'Authentication required'}), 401
 
 def update_monitoring_data():
     """Background thread to continuously update monitoring data."""
@@ -73,101 +107,191 @@ def update_monitoring_data():
         refresh_interval = config_manager.get('monitoring.refresh_interval', 5)
         time.sleep(refresh_interval)
 
+# Authentication routes
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """Login page."""
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        if not username or not password:
+            flash('Username and password are required', 'error')
+            return render_template('login.html')
+        
+        user = auth_manager.authenticate(username, password)
+        if user:
+            login_user(user)
+            next_page = request.args.get('next')
+            return redirect(next_page or url_for('index'))
+        else:
+            flash('Invalid username or password', 'error')
+    
+    return render_template('login.html')
+
+@app.route('/logout')
+@login_required
+def logout():
+    """Logout route."""
+    logout_user()
+    flash('You have been logged out', 'info')
+    return redirect(url_for('login'))
+
+@app.route('/profile')
+@login_required
+def profile_page():
+    """User profile page."""
+    return render_template('profile.html')
+
+@app.route('/api/profile/change-password', methods=['POST'])
+@login_required
+def change_password():
+    """API endpoint to change user password."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'Request body required'}), 400
+        
+        old_password = data.get('old_password')
+        new_password = data.get('new_password')
+        confirm_password = data.get('confirm_password')
+        
+        if not old_password or not new_password or not confirm_password:
+            return jsonify({'success': False, 'error': 'All password fields are required'}), 400
+        
+        if new_password != confirm_password:
+            return jsonify({'success': False, 'error': 'New passwords do not match'}), 400
+        
+        if len(new_password) < 6:
+            return jsonify({'success': False, 'error': 'New password must be at least 6 characters long'}), 400
+        
+        success, message = auth_manager.change_password(
+            current_user.username,
+            old_password,
+            new_password
+        )
+        
+        if success:
+            return jsonify({'success': True, 'message': message})
+        else:
+            return jsonify({'success': False, 'error': message}), 400
+    except Exception as e:
+        logger.error(f"Error changing password: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/')
+@login_required
 def index():
     """Main dashboard page."""
     return render_template('dashboard.html')
 
 @app.route('/api/monitoring-data')
+@login_required
 def get_monitoring_data():
     """API endpoint to get current monitoring data."""
     with data_lock:
         return jsonify(latest_data)
 
 @app.route('/api/services')
+@login_required
 def get_services():
     """API endpoint to get running services."""
     services = monitor.get_running_services()
     return jsonify(services)
 
 @app.route('/api/ports')
+@login_required
 def get_ports():
     """API endpoint to get active ports."""
     ports = monitor.get_active_ports()
     return jsonify(ports)
 
 @app.route('/api/clients')
+@login_required
 def get_clients():
     """API endpoint to get active clients."""
     clients = monitor.get_active_clients()
     return jsonify(clients)
 
 @app.route('/api/client-stats')
+@login_required
 def get_client_statistics():
     """API endpoint to get client statistics."""
     stats = monitor.get_client_statistics()
     return jsonify(stats)
 
 @app.route('/api/client-history/<client_ip>')
+@login_required
 def get_client_history(client_ip):
     """API endpoint to get client access history."""
     history = monitor.get_client_history(client_ip)
     return jsonify(history)
 
 @app.route('/api/mysql')
+@login_required
 def get_mysql_status():
     """API endpoint to get MySQL status."""
     mysql_status = monitor.check_mysql_status()
     return jsonify(mysql_status)
 
 @app.route('/api/postgresql')
+@login_required
 def get_postgresql_status():
     """API endpoint to get PostgreSQL status."""
     postgres_status = monitor.check_postgresql_status()
     return jsonify(postgres_status)
 
 @app.route('/api/system-info')
+@login_required
 def get_system_info():
     """API endpoint to get system information."""
     system_info = monitor.get_system_info()
     return jsonify(system_info)
 
 @app.route('/services')
+@login_required
 def services_page():
     """Services monitoring page."""
     return render_template('services.html')
 
 @app.route('/ports')
+@login_required
 def ports_page():
     """Ports monitoring page."""
     return render_template('ports.html')
 
 @app.route('/clients')
+@login_required
 def clients_page():
     """Client monitoring page."""
     return render_template('clients.html')
 
 @app.route('/databases')
+@login_required
 def databases_page():
     """Database monitoring page."""
     return render_template('databases.html')
 
 @app.route('/system')
+@login_required
 def system_page():
     """System information page."""
     return render_template('system.html')
 
 @app.route('/config')
+@login_required
 def config_page():
     """Configuration management page."""
     return render_template('config.html')
 
 @app.route('/proxy-detection')
+@login_required
 def proxy_detection_page():
     """Enhanced proxy detection page."""
     return render_template('proxy-detection.html')
 
 @app.route('/api/config')
+@login_required
 def get_config():
     """API endpoint to get current configuration."""
     return jsonify({
@@ -177,12 +301,15 @@ def get_config():
     })
 
 @app.route('/api/config/allowed-ips', methods=['GET', 'POST', 'DELETE'])
+@login_required
 def manage_allowed_ips():
     """API endpoint to manage allowed IPs."""
     if request.method == 'GET':
         return jsonify({'allowed_ips': config_manager.list_allowed_ips()})
     
     elif request.method == 'POST':
+        if not current_user.can_edit():
+            return jsonify({'error': 'Permission denied. Admin access required.'}), 403
         data = request.get_json()
         ip = data.get('ip')
         if not ip:
@@ -194,6 +321,8 @@ def manage_allowed_ips():
             return jsonify({'error': f'Invalid IP format: {ip}'}), 400
     
     elif request.method == 'DELETE':
+        if not current_user.can_edit():
+            return jsonify({'error': 'Permission denied. Admin access required.'}), 403
         data = request.get_json()
         ip = data.get('ip')
         if not ip:
@@ -205,6 +334,8 @@ def manage_allowed_ips():
             return jsonify({'error': f'IP not found: {ip}'}), 404
 
 @app.route('/api/config/ip-restriction', methods=['POST'])
+@login_required
+@can_edit_required
 def toggle_ip_restriction():
     """API endpoint to enable/disable IP restriction."""
     data = request.get_json()
@@ -218,40 +349,737 @@ def toggle_ip_restriction():
         return jsonify({'message': 'IP restriction disabled'})
 
 @app.route('/api/config/reload', methods=['POST'])
+@login_required
+@can_edit_required
 def reload_config():
     """API endpoint to reload configuration."""
     config_manager.reload_config()
     return jsonify({'message': 'Configuration reloaded'})
 
 @app.route('/api/proxy-detection')
+@login_required
 def get_proxy_detection():
     """API endpoint to get comprehensive proxy detection data."""
     proxy_data = monitor.check_proxy_usage()
     return jsonify(proxy_data)
 
 @app.route('/api/network-connections')
+@login_required
 def get_network_connections():
     """API endpoint to get all network connections across all ports."""
     connections_data = monitor.monitor_network_connections()
     return jsonify(connections_data)
 
 @app.route('/api/network-client-stats')
+@login_required
 def get_network_client_statistics():
     """API endpoint to get network client statistics across all ports."""
     stats_data = monitor.get_network_client_statistics()
     return jsonify(stats_data)
 
 @app.route('/api/clients-by-port')
+@login_required
 def get_clients_by_port():
     """API endpoint to get clients categorized by ports."""
     clients_by_port_data = monitor.get_clients_by_port()
     return jsonify(clients_by_port_data)
 
 @app.route('/api/custom-port-clients')
+@login_required
 def get_custom_port_clients():
     """API endpoint to get clients for custom ports defined in port_labels.json."""
     custom_port_clients_data = monitor.get_custom_port_clients()
     return jsonify(custom_port_clients_data)
+
+@app.route('/network-interfaces')
+@login_required
+def network_interfaces_page():
+    """Network interfaces management page."""
+    return render_template('network-interfaces.html')
+
+@app.route('/api/network-interfaces')
+@login_required
+def get_network_interfaces():
+    """API endpoint to get network interfaces."""
+    interfaces = monitor.get_network_interfaces()
+    return jsonify(interfaces)
+
+@app.route('/api/test-ips', methods=['GET', 'POST', 'DELETE'])
+@login_required
+def manage_test_ips():
+    """API endpoint to manage test IP list."""
+    if request.method == 'GET':
+        try:
+            return jsonify({'ips': monitor.get_test_ip_list()})
+        except Exception as e:
+            logger.error(f"Error getting test IP list: {e}")
+            return jsonify({'error': str(e), 'ips': []}), 500
+    
+    elif request.method == 'POST':
+        if not current_user.can_edit():
+            return jsonify({'error': 'Permission denied. Admin access required.'}), 403
+        try:
+            data = request.get_json()
+            if not data:
+                return jsonify({'error': 'Request body required'}), 400
+            
+            ip = data.get('ip')
+            if not ip:
+                return jsonify({'error': 'IP address required'}), 400
+            
+            ip = ip.strip()
+            if monitor.add_test_ip(ip):
+                return jsonify({'message': f'Added IP: {ip}', 'ips': monitor.get_test_ip_list()})
+            else:
+                # Check if IP is already in list
+                current_ips = monitor.get_test_ip_list()
+                if ip in current_ips:
+                    return jsonify({'error': f'IP {ip} already exists in test list'}), 400
+                else:
+                    return jsonify({'error': f'Invalid IP address format: {ip}'}), 400
+        except Exception as e:
+            logger.error(f"Error adding test IP: {e}")
+            return jsonify({'error': f'Error adding IP: {str(e)}'}), 500
+    
+    elif request.method == 'DELETE':
+        if not current_user.can_edit():
+            return jsonify({'error': 'Permission denied. Admin access required.'}), 403
+        try:
+            data = request.get_json()
+            if not data:
+                return jsonify({'error': 'Request body required'}), 400
+            
+            ip = data.get('ip')
+            if not ip:
+                return jsonify({'error': 'IP address required'}), 400
+            
+            ip = ip.strip()
+            if monitor.remove_test_ip(ip):
+                return jsonify({'message': f'Removed IP: {ip}', 'ips': monitor.get_test_ip_list()})
+            else:
+                return jsonify({'error': f'IP not found: {ip}'}), 404
+        except Exception as e:
+            logger.error(f"Error removing test IP: {e}")
+            return jsonify({'error': f'Error removing IP: {str(e)}'}), 500
+
+@app.route('/api/test-ip-connection', methods=['POST'])
+@login_required
+def test_ip_connection():
+    """API endpoint to test IP connection through specific interface."""
+    data = request.get_json()
+    ip = data.get('ip')
+    interface = data.get('interface')
+    
+    if not ip:
+        return jsonify({'error': 'IP address required'}), 400
+    
+    result = monitor.test_ip_connection(ip, interface)
+    return jsonify(result)
+
+@app.route('/api/test-all-ips', methods=['POST'])
+@login_required
+def test_all_ips():
+    """API endpoint to test all IPs in the list through specified interface."""
+    data = request.get_json() or {}
+    interface = data.get('interface')
+    
+    results = monitor.test_all_ips(interface)
+    return jsonify({'results': results})
+
+@app.route('/api/test-ip-all-interfaces', methods=['POST'])
+@login_required
+def test_ip_all_interfaces():
+    """API endpoint to test a specific IP through all available interfaces."""
+    data = request.get_json()
+    ip = data.get('ip')
+    
+    if not ip:
+        return jsonify({'error': 'IP address required'}), 400
+    
+    results = monitor.test_ip_all_interfaces(ip)
+    return jsonify({'results': results, 'ip': ip})
+
+@app.route('/api/test-urls', methods=['GET', 'POST', 'DELETE'])
+@login_required
+def manage_test_urls():
+    """API endpoint to manage test URL list."""
+    if request.method == 'GET':
+        try:
+            return jsonify({'urls': monitor.get_test_url_list()})
+        except Exception as e:
+            logger.error(f"Error getting test URL list: {e}")
+            return jsonify({'error': str(e), 'urls': []}), 500
+    
+    elif request.method == 'POST':
+        if not current_user.can_edit():
+            return jsonify({'error': 'Permission denied. Admin access required.'}), 403
+        try:
+            data = request.get_json()
+            if not data:
+                return jsonify({'error': 'Request body required'}), 400
+            
+            url = data.get('url')
+            if not url:
+                return jsonify({'error': 'URL required'}), 400
+            
+            url = url.strip()
+            if monitor.add_test_url(url):
+                return jsonify({'message': f'Added URL: {url}', 'urls': monitor.get_test_url_list()})
+            else:
+                # Check if URL is already in list
+                current_urls = monitor.get_test_url_list()
+                if url in current_urls:
+                    return jsonify({'error': f'URL {url} already exists in test list'}), 400
+                else:
+                    return jsonify({'error': f'Invalid URL format: {url}. Must start with http:// or https://'}), 400
+        except Exception as e:
+            logger.error(f"Error adding test URL: {e}")
+            return jsonify({'error': f'Error adding URL: {str(e)}'}), 500
+    
+    elif request.method == 'DELETE':
+        if not current_user.can_edit():
+            return jsonify({'error': 'Permission denied. Admin access required.'}), 403
+        try:
+            data = request.get_json()
+            if not data:
+                return jsonify({'error': 'Request body required'}), 400
+            
+            url = data.get('url')
+            if not url:
+                return jsonify({'error': 'URL required'}), 400
+            
+            url = url.strip()
+            if monitor.remove_test_url(url):
+                return jsonify({'message': f'Removed URL: {url}', 'urls': monitor.get_test_url_list()})
+            else:
+                return jsonify({'error': f'URL not found: {url}'}), 404
+        except Exception as e:
+            logger.error(f"Error removing test URL: {e}")
+            return jsonify({'error': f'Error removing URL: {str(e)}'}), 500
+
+@app.route('/api/test-url-connection', methods=['POST'])
+@login_required
+def test_url_connection():
+    """API endpoint to test URL connection through specific interface."""
+    data = request.get_json()
+    url = data.get('url')
+    interface = data.get('interface')
+    
+    if not url:
+        return jsonify({'error': 'URL required'}), 400
+    
+    result = monitor.test_url_connection(url, interface)
+    return jsonify(result)
+
+@app.route('/api/test-all-urls', methods=['POST'])
+@login_required
+def test_all_urls():
+    """API endpoint to test all URLs in the list through specified interface."""
+    data = request.get_json() or {}
+    interface = data.get('interface')
+    
+    results = monitor.test_all_urls(interface)
+    return jsonify({'results': results})
+
+@app.route('/api/test-url-all-interfaces', methods=['POST'])
+@login_required
+def test_url_all_interfaces():
+    """API endpoint to test a specific URL through all available interfaces."""
+    data = request.get_json()
+    url = data.get('url')
+    
+    if not url:
+        return jsonify({'error': 'URL required'}), 400
+    
+    results = monitor.test_url_all_interfaces(url)
+    return jsonify({'results': results, 'url': url})
+
+@app.route('/api/traceroute', methods=['POST'])
+@login_required
+def traceroute_ip():
+    """API endpoint to perform traceroute to an IP through specific interface."""
+    data = request.get_json()
+    ip = data.get('ip')
+    interface = data.get('interface')
+    
+    if not ip:
+        return jsonify({'error': 'IP address required'}), 400
+    
+    result = monitor.traceroute_ip(ip, interface)
+    return jsonify(result)
+
+@app.route('/api/set-route', methods=['POST'])
+@login_required
+@can_edit_required
+def set_route():
+    """API endpoint to set route for an interface."""
+    data = request.get_json()
+    interface = data.get('interface')
+    target_ip = data.get('target_ip')
+    gateway = data.get('gateway')
+    
+    if not interface or not target_ip:
+        return jsonify({'error': 'Interface and target IP required'}), 400
+    
+    result = monitor.set_route(interface, target_ip, gateway)
+    return jsonify(result)
+
+@app.route('/api/disable-route', methods=['POST'])
+@login_required
+@can_edit_required
+def disable_route():
+    """API endpoint to disable route for an interface."""
+    data = request.get_json()
+    interface = data.get('interface')
+    
+    if not interface:
+        return jsonify({'error': 'Interface required'}), 400
+    
+    result = monitor.disable_route(interface)
+    return jsonify(result)
+
+@app.route('/api/enable-route', methods=['POST'])
+@login_required
+@can_edit_required
+def enable_route():
+    """API endpoint to enable route for an interface."""
+    data = request.get_json()
+    interface = data.get('interface')
+    
+    if not interface:
+        return jsonify({'error': 'Interface required'}), 400
+    
+    result = monitor.enable_route(interface)
+    return jsonify(result)
+
+@app.route('/api/route-status')
+@login_required
+def get_route_status():
+    """API endpoint to get route status."""
+    interface = request.args.get('interface')
+    status = monitor.get_route_status(interface)
+    return jsonify(status)
+
+@app.route('/api/monitor-routes')
+@login_required
+def monitor_routes():
+    """API endpoint to monitor all routes."""
+    route_data = monitor.monitor_all_routes()
+    return jsonify(route_data)
+
+@app.route('/api/test-route', methods=['POST'])
+@login_required
+def test_route():
+    """API endpoint to test a specific route connection."""
+    data = request.get_json()
+    interface = data.get('interface')
+    
+    if not interface:
+        return jsonify({'error': 'Interface required'}), 400
+    
+    result = monitor.test_route_connection(interface)
+    return jsonify(result)
+
+@app.route('/api/all-system-routes')
+@login_required
+def get_all_system_routes():
+    """API endpoint to get all system routes with flag explanations."""
+    routes_data = monitor.get_all_system_routes()
+    return jsonify(routes_data)
+
+@app.route('/api/save-configs', methods=['POST'])
+@login_required
+@can_edit_required
+def save_configs():
+    """API endpoint to manually save test IPs and routes to YAML files."""
+    try:
+        test_ips_saved = monitor.save_test_ips_to_file()
+        routes_saved = monitor.save_routes_to_file()
+        
+        return jsonify({
+            'success': True,
+            'test_ips_saved': test_ips_saved,
+            'routes_saved': routes_saved,
+            'message': 'Configurations saved successfully'
+        })
+    except Exception as e:
+        logger.error(f"Error saving configurations: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/reload-configs', methods=['POST'])
+@login_required
+@can_edit_required
+def reload_configs():
+    """API endpoint to reload test IPs, URLs and routes from YAML files."""
+    try:
+        test_ips_loaded = monitor.load_test_ips_from_file()
+        test_urls_loaded = monitor.load_test_urls_from_file()
+        routes_loaded = monitor.load_routes_from_file()
+        
+        return jsonify({
+            'success': True,
+            'test_ips_loaded': test_ips_loaded,
+            'test_urls_loaded': test_urls_loaded,
+            'routes_loaded': routes_loaded,
+            'message': 'Configurations reloaded successfully',
+            'test_ips': monitor.get_test_ip_list(),
+            'test_urls': monitor.get_test_url_list(),
+            'routes': monitor.get_route_status().get('configured_routes', {})
+        })
+    except Exception as e:
+        logger.error(f"Error reloading configurations: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# Rsync routes
+@app.route('/rsync')
+@login_required
+def rsync_page():
+    """Rsync management page."""
+    return render_template('rsync.html')
+
+@app.route('/api/rsync/jobs', methods=['GET'])
+@login_required
+def get_rsync_jobs():
+    """Get all rsync jobs."""
+    try:
+        jobs = rsync_manager.get_all_jobs()
+        return jsonify({'success': True, 'jobs': jobs})
+    except Exception as e:
+        logger.error(f"Error getting rsync jobs: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/rsync/jobs', methods=['POST'])
+@login_required
+@can_edit_required
+def create_rsync_job():
+    """Create a new rsync job."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'Request body required'}), 400
+        
+        job_id = rsync_manager.add_job(data)
+        return jsonify({'success': True, 'job_id': job_id, 'message': 'Job created successfully'})
+    except Exception as e:
+        logger.error(f"Error creating rsync job: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/rsync/jobs/<job_id>', methods=['PUT'])
+@login_required
+@can_edit_required
+def update_rsync_job(job_id):
+    """Update an rsync job."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'Request body required'}), 400
+        
+        if rsync_manager.update_job(job_id, data):
+            return jsonify({'success': True, 'message': 'Job updated successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'Job not found'}), 404
+    except Exception as e:
+        logger.error(f"Error updating rsync job: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/rsync/jobs/<job_id>', methods=['DELETE'])
+@login_required
+@can_edit_required
+def delete_rsync_job(job_id):
+    """Delete an rsync job."""
+    try:
+        if rsync_manager.delete_job(job_id):
+            return jsonify({'success': True, 'message': 'Job deleted successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'Job not found'}), 404
+    except Exception as e:
+        logger.error(f"Error deleting rsync job: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/rsync/jobs/<job_id>/start', methods=['POST'])
+@login_required
+@can_edit_required
+def start_rsync_job(job_id):
+    """Start an rsync job."""
+    try:
+        data = request.get_json() or {}
+        persistent = data.get('persistent', False)
+        
+        if rsync_manager.start_job(job_id, persistent=persistent):
+            return jsonify({'success': True, 'message': 'Job started successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'Job not found or already running'}), 400
+    except Exception as e:
+        logger.error(f"Error starting rsync job: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/rsync/jobs/<job_id>/stop', methods=['POST'])
+@login_required
+@can_edit_required
+def stop_rsync_job(job_id):
+    """Stop an rsync job."""
+    try:
+        if rsync_manager.stop_job(job_id):
+            return jsonify({'success': True, 'message': 'Job stopped successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'Job not found or not running'}), 400
+    except Exception as e:
+        logger.error(f"Error stopping rsync job: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/rsync/jobs/<job_id>/run-once', methods=['POST'])
+@login_required
+@can_edit_required
+def run_rsync_job_once(job_id):
+    """Run an rsync job once."""
+    try:
+        if rsync_manager.run_job_once(job_id):
+            return jsonify({'success': True, 'message': 'Job started successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'Job not found or already running'}), 400
+    except Exception as e:
+        logger.error(f"Error running rsync job: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/rsync/jobs/<job_id>/logs', methods=['GET'])
+@login_required
+def get_rsync_job_logs(job_id):
+    """Get logs for an rsync job."""
+    try:
+        limit = request.args.get('limit', 100, type=int)
+        logs = rsync_manager.get_job_logs(job_id, limit=limit)
+        return jsonify({'success': True, 'logs': logs})
+    except Exception as e:
+        logger.error(f"Error getting rsync job logs: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/rsync/jobs/<job_id>/command', methods=['GET'])
+@login_required
+def get_rsync_job_command(job_id):
+    """Get the rsync command string for a job."""
+    try:
+        command = rsync_manager.get_job_command(job_id)
+        if command:
+            return jsonify({'success': True, 'command': command})
+        else:
+            return jsonify({'success': False, 'error': 'Job not found'}), 404
+    except Exception as e:
+        logger.error(f"Error getting rsync job command: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# WebSocket handlers for real-time monitoring
+@socketio.on('connect')
+def handle_connect():
+    """Handle client connection."""
+    logger.info('Client connected')
+    emit('connected', {'message': 'Connected to rsync monitor'})
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    """Handle client disconnection."""
+    logger.info('Client disconnected')
+
+@socketio.on('subscribe_job')
+def handle_subscribe_job(data):
+    """Subscribe to a job's real-time output."""
+    job_id = data.get('job_id')
+    if job_id:
+        # Set up callback for this job
+        def output_callback(output_data):
+            socketio.emit('job_output', {
+                'job_id': job_id,
+                'data': output_data
+            })
+        
+        rsync_manager.set_output_callback(job_id, output_callback)
+        emit('subscribed', {'job_id': job_id, 'message': 'Subscribed to job output'})
+
+@socketio.on('unsubscribe_job')
+def handle_unsubscribe_job(data):
+    """Unsubscribe from a job's real-time output."""
+    job_id = data.get('job_id')
+    if job_id and job_id in rsync_manager.output_callbacks:
+        del rsync_manager.output_callbacks[job_id]
+        emit('unsubscribed', {'job_id': job_id, 'message': 'Unsubscribed from job output'})
+
+# PostgreSQL Sync routes
+@app.route('/postgres-sync')
+@login_required
+def postgres_sync_page():
+    """PostgreSQL sync management page."""
+    return render_template('postgres-sync.html')
+
+@app.route('/api/postgres-sync/jobs', methods=['GET'])
+@login_required
+def get_postgres_sync_jobs():
+    """Get all PostgreSQL sync jobs."""
+    try:
+        jobs = postgres_sync_manager.get_all_jobs()
+        return jsonify({'success': True, 'jobs': jobs})
+    except Exception as e:
+        logger.error(f"Error getting PostgreSQL sync jobs: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/postgres-sync/jobs', methods=['POST'])
+@login_required
+@can_edit_required
+def create_postgres_sync_job():
+    """Create a new PostgreSQL sync job."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'Request body required'}), 400
+        
+        job_id = postgres_sync_manager.add_job(data)
+        return jsonify({'success': True, 'job_id': job_id, 'message': 'Job created successfully'})
+    except Exception as e:
+        logger.error(f"Error creating PostgreSQL sync job: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/postgres-sync/jobs/<job_id>', methods=['PUT'])
+@login_required
+@can_edit_required
+def update_postgres_sync_job(job_id):
+    """Update a PostgreSQL sync job."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'Request body required'}), 400
+        
+        if postgres_sync_manager.update_job(job_id, data):
+            return jsonify({'success': True, 'message': 'Job updated successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'Job not found'}), 404
+    except Exception as e:
+        logger.error(f"Error updating PostgreSQL sync job: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/postgres-sync/jobs/<job_id>', methods=['DELETE'])
+@login_required
+@can_edit_required
+def delete_postgres_sync_job(job_id):
+    """Delete a PostgreSQL sync job."""
+    try:
+        if postgres_sync_manager.delete_job(job_id):
+            return jsonify({'success': True, 'message': 'Job deleted successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'Job not found'}), 404
+    except Exception as e:
+        logger.error(f"Error deleting PostgreSQL sync job: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/postgres-sync/jobs/<job_id>/start', methods=['POST'])
+@login_required
+@can_edit_required
+def start_postgres_sync_job(job_id):
+    """Start a PostgreSQL sync job."""
+    try:
+        data = request.get_json() or {}
+        persistent = data.get('persistent', False)
+        
+        if postgres_sync_manager.start_job(job_id, persistent=persistent):
+            return jsonify({'success': True, 'message': 'Job started successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'Job not found or already running'}), 400
+    except Exception as e:
+        logger.error(f"Error starting PostgreSQL sync job: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/postgres-sync/jobs/<job_id>/stop', methods=['POST'])
+@login_required
+@can_edit_required
+def stop_postgres_sync_job(job_id):
+    """Stop a PostgreSQL sync job (stops both task and persistent mode)."""
+    try:
+        if postgres_sync_manager.stop_job(job_id):
+            return jsonify({'success': True, 'message': 'Job stopped successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'Job not found or not running'}), 400
+    except Exception as e:
+        logger.error(f"Error stopping PostgreSQL sync job: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/postgres-sync/jobs/<job_id>/stop-task', methods=['POST'])
+@login_required
+@can_edit_required
+def stop_postgres_sync_task(job_id):
+    """Stop only the currently running task, keep persistent mode enabled."""
+    try:
+        if postgres_sync_manager.stop_task(job_id):
+            return jsonify({'success': True, 'message': 'Task stopped successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'Job not found or task not running'}), 400
+    except Exception as e:
+        logger.error(f"Error stopping PostgreSQL sync task: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/postgres-sync/jobs/<job_id>/stop-persistent', methods=['POST'])
+@login_required
+@can_edit_required
+def stop_postgres_sync_persistent(job_id):
+    """Stop persistent mode, allow current task to finish if running."""
+    try:
+        if postgres_sync_manager.stop_persistent(job_id):
+            return jsonify({'success': True, 'message': 'Persistent mode stopped successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'Job not found or persistent mode not enabled'}), 400
+    except Exception as e:
+        logger.error(f"Error stopping PostgreSQL sync persistent mode: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/postgres-sync/jobs/<job_id>/run-once', methods=['POST'])
+@login_required
+@can_edit_required
+def run_postgres_sync_job_once(job_id):
+    """Run a PostgreSQL sync job once."""
+    try:
+        if postgres_sync_manager.run_job_once(job_id):
+            return jsonify({'success': True, 'message': 'Job started successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'Job not found or already running'}), 400
+    except Exception as e:
+        logger.error(f"Error running PostgreSQL sync job: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/postgres-sync/jobs/<job_id>/logs', methods=['GET'])
+@login_required
+def get_postgres_sync_job_logs(job_id):
+    """Get logs for a PostgreSQL sync job."""
+    try:
+        logs = postgres_sync_manager.get_job_logs(job_id)
+        return jsonify({'success': True, 'logs': logs})
+    except Exception as e:
+        logger.error(f"Error getting PostgreSQL sync job logs: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@socketio.on('subscribe_postgres_job')
+def handle_subscribe_postgres_job(data):
+    """Subscribe to a PostgreSQL sync job's real-time output."""
+    job_id = data.get('job_id')
+    if job_id:
+        # Set up callback for this job
+        def output_callback(output_data):
+            socketio.emit('postgres_job_output', {
+                'job_id': job_id,
+                'data': output_data
+            })
+        
+        postgres_sync_manager.set_output_callback(job_id, output_callback)
+        emit('subscribed', {'job_id': job_id, 'message': 'Subscribed to job output'})
+
+@socketio.on('unsubscribe_postgres_job')
+def handle_unsubscribe_postgres_job(data):
+    """Unsubscribe from a PostgreSQL sync job's real-time output."""
+    job_id = data.get('job_id')
+    if job_id and job_id in postgres_sync_manager.output_callbacks:
+        del postgres_sync_manager.output_callbacks[job_id]
+        emit('unsubscribed', {'job_id': job_id, 'message': 'Unsubscribed from job output'})
 
 @app.errorhandler(403)
 def forbidden(error):
@@ -288,4 +1116,4 @@ if __name__ == '__main__':
     print("Dashboard will be available at: http://localhost:9100")
     print("Press Ctrl+C to stop the server")
     
-    app.run(debug=True, host='0.0.0.0', port=9100)
+    socketio.run(app, debug=True, host='0.0.0.0', port=9100)

@@ -1,0 +1,19 @@
+{
+  "jobs": {
+    "job_1766134026": {
+      "job_id": "job_1766134026",
+      "name": "http://10.3.20.26:4899",
+      "sync_type": "missing_files",
+      "destination_ip": "10.3.20.26",
+      "destination_folder": "/opt/homebrew/var/www/files",
+      "username": "lstech",
+      "password": "qwer.1234",
+      "source_folder": "/opt/homebrew/var/www/files/auto_jmp_files",
+      "update_interval": 600,
+      "is_running": false,
+      "is_persistent": false,
+      "last_run": "2025-12-19T19:03:11.611678",
+      "status": "stopped"
+    }
+  }
+}

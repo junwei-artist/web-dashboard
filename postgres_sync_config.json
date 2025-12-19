@@ -1,0 +1,382 @@
+{
+  "jobs": {
+    "postgres_sync_1766137708": {
+      "job_id": "postgres_sync_1766137708",
+      "name": "w1-w5",
+      "sync_type": "complete_model",
+      "source_host": "localhost",
+      "source_port": 5432,
+      "source_database": "data_analysis",
+      "source_user": "data_user",
+      "source_password": "data_userpassword",
+      "target_host": "10.3.20.26",
+      "target_port": 5432,
+      "target_database": "data_analysis",
+      "target_user": "data_user",
+      "target_password": "data_userpassword",
+      "check_interval": 600,
+      "is_running": false,
+      "is_persistent": false,
+      "last_run": "2025-12-19T19:03:40.637979",
+      "status": "stopped",
+      "last_sync_stats": {
+        "tables_processed": 35,
+        "rows_synced_source_to_target": 16,
+        "rows_synced_target_to_source": 0,
+        "rows_failed": 229,
+        "rows_skipped": 0
+      },
+      "monitor_rows": [
+        {
+          "timestamp": "2025-12-19T19:03:41.248573",
+          "type": "status",
+          "status": "error",
+          "table_name": "workflow_node",
+          "row_id": "8575ae3a-eb42-4390-a36d-589614122ab6",
+          "message": "Failed to insert row 8575ae3a-eb42-4390-a36d-589614122ab6 into source"
+        },
+        {
+          "timestamp": "2025-12-19T19:03:41.249281",
+          "type": "status",
+          "status": "error",
+          "table_name": "workflow_node",
+          "row_id": "3aa6d8ef-b908-4062-9435-de64c4b5f19e",
+          "message": "Failed to insert row 3aa6d8ef-b908-4062-9435-de64c4b5f19e into source"
+        },
+        {
+          "timestamp": "2025-12-19T19:03:41.249999",
+          "type": "status",
+          "status": "error",
+          "table_name": "workflow_node",
+          "row_id": "e7ca09cb-c39a-45e2-8db6-ded133941493",
+          "message": "Failed to insert row e7ca09cb-c39a-45e2-8db6-ded133941493 into source"
+        },
+        {
+          "timestamp": "2025-12-19T19:03:41.250677",
+          "type": "status",
+          "status": "error",
+          "table_name": "workflow_node",
+          "row_id": "c98b13b3-a939-4cd4-829a-ec82be7539ce",
+          "message": "Failed to insert row c98b13b3-a939-4cd4-829a-ec82be7539ce into source"
+        },
+        {
+          "timestamp": "2025-12-19T19:03:41.251343",
+          "type": "status",
+          "status": "error",
+          "table_name": "workflow_node",
+          "row_id": "82668258-8f60-4ee9-8c91-375be76b5f52",
+          "message": "Failed to insert row 82668258-8f60-4ee9-8c91-375be76b5f52 into source"
+        },
+        {
+          "timestamp": "2025-12-19T19:03:41.251949",
+          "type": "status",
+          "status": "error",
+          "table_name": "workflow_node",
+          "row_id": "acbedb0b-9a11-46af-bd22-d62350755460",
+          "message": "Failed to insert row acbedb0b-9a11-46af-bd22-d62350755460 into source"
+        },
+        {
+          "timestamp": "2025-12-19T19:03:41.252608",
+          "type": "status",
+          "status": "error",
+          "table_name": "workflow_node",
+          "row_id": "f431ce34-e61e-496e-bb66-a7d37267c00e",
+          "message": "Failed to insert row f431ce34-e61e-496e-bb66-a7d37267c00e into source"
+        },
+        {
+          "timestamp": "2025-12-19T19:03:41.253205",
+          "type": "status",
+          "status": "error",
+          "table_name": "workflow_node",
+          "row_id": "626341f6-3471-4454-ad9d-36ef3d39b0fb",
+          "message": "Failed to insert row 626341f6-3471-4454-ad9d-36ef3d39b0fb into source"
+        },
+        {
+          "timestamp": "2025-12-19T19:03:41.253796",
+          "type": "status",
+          "status": "error",
+          "table_name": "workflow_node",
+          "row_id": "4e083d87-2b30-4861-a66d-053f77654fdf",
+          "message": "Failed to insert row 4e083d87-2b30-4861-a66d-053f77654fdf into source"
+        },
+        {
+          "timestamp": "2025-12-19T19:03:41.254470",
+          "type": "status",
+          "status": "error",
+          "table_name": "workflow_node",
+          "row_id": "5a1bfac0-6379-430e-b321-3b4f2411ecb9",
+          "message": "Failed to insert row 5a1bfac0-6379-430e-b321-3b4f2411ecb9 into source"
+        },
+        {
+          "timestamp": "2025-12-19T19:03:41.255031",
+          "type": "status",
+          "status": "error",
+          "table_name": "workflow_node",
+          "row_id": "ae7bb30f-6d95-440e-8f23-8539e11c3f95",
+          "message": "Failed to insert row ae7bb30f-6d95-440e-8f23-8539e11c3f95 into source"
+        },
+        {
+          "timestamp": "2025-12-19T19:03:41.255920",
+          "type": "status",
+          "status": "error",
+          "table_name": "workflow_node",
+          "row_id": "96173c1a-26dd-4e1d-81dc-52c58aaeb2c7",
+          "message": "Failed to insert row 96173c1a-26dd-4e1d-81dc-52c58aaeb2c7 into source"
+        },
+        {
+          "timestamp": "2025-12-19T19:03:41.257156",
+          "type": "status",
+          "status": "error",
+          "table_name": "workflow_node",
+          "row_id": "15538f18-ad20-44c7-89f7-41116e5f7ba6",
+          "message": "Failed to insert row 15538f18-ad20-44c7-89f7-41116e5f7ba6 into source"
+        },
+        {
+          "timestamp": "2025-12-19T19:03:41.282750",
+          "type": "status",
+          "status": "error",
+          "table_name": "project_attachment",
+          "row_id": "0f87ccee-943c-4cee-8f09-dc26d3febac9",
+          "message": "Failed to insert row 0f87ccee-943c-4cee-8f09-dc26d3febac9 into target"
+        },
+        {
+          "timestamp": "2025-12-19T19:03:41.296651",
+          "type": "status",
+          "status": "error",
+          "table_name": "project_member",
+          "row_id": "807e42b7-6b3a-475b-a210-1bc5f2012bff",
+          "message": "Failed to insert row 807e42b7-6b3a-475b-a210-1bc5f2012bff into target"
+        },
+        {
+          "timestamp": "2025-12-19T19:03:41.299297",
+          "type": "status",
+          "status": "error",
+          "table_name": "project_member",
+          "row_id": "fb8f48bf-a376-42e4-a249-0457f044a75a",
+          "message": "Failed to insert row fb8f48bf-a376-42e4-a249-0457f044a75a into target"
+        },
+        {
+          "timestamp": "2025-12-19T19:03:41.302008",
+          "type": "status",
+          "status": "error",
+          "table_name": "project_member",
+          "row_id": "71bd8187-54ab-43ee-81df-a8bbf289d271",
+          "message": "Failed to insert row 71bd8187-54ab-43ee-81df-a8bbf289d271 into target"
+        },
+        {
+          "timestamp": "2025-12-19T19:03:41.304250",
+          "type": "status",
+          "status": "error",
+          "table_name": "project_member",
+          "row_id": "762aa201-3e26-4f02-a66c-8a6a2da53546",
+          "message": "Failed to insert row 762aa201-3e26-4f02-a66c-8a6a2da53546 into source"
+        },
+        {
+          "timestamp": "2025-12-19T19:03:41.370638",
+          "type": "status",
+          "status": "error",
+          "table_name": "app_user",
+          "row_id": "05cf2b81-2d73-464b-97af-36e317163ced",
+          "message": "Failed to insert row 05cf2b81-2d73-464b-97af-36e317163ced into target"
+        },
+        {
+          "timestamp": "2025-12-19T19:03:41.373475",
+          "type": "status",
+          "status": "error",
+          "table_name": "app_user",
+          "row_id": "4676b654-c666-4b6a-b4a7-bcf58a5d6888",
+          "message": "Failed to insert row 4676b654-c666-4b6a-b4a7-bcf58a5d6888 into source"
+        }
+      ]
+    },
+    "postgres_sync_1766141801": {
+      "job_id": "postgres_sync_1766141801",
+      "name": "to public server",
+      "sync_type": "complete_model",
+      "source_host": "localhost",
+      "source_port": 5432,
+      "source_database": "data_analysis",
+      "source_user": "data_user",
+      "source_password": "data_userpassword",
+      "target_host": "47.112.191.42",
+      "target_port": 5432,
+      "target_database": "data_analysis",
+      "target_user": "data_user",
+      "target_password": "data_userpassword",
+      "check_interval": 600,
+      "is_running": false,
+      "is_persistent": false,
+      "last_run": "2025-12-19T19:03:08.793517",
+      "status": "stopped",
+      "last_sync_stats": {
+        "tables_processed": 35,
+        "rows_synced_source_to_target": 4,
+        "rows_synced_target_to_source": 8,
+        "rows_failed": 187,
+        "rows_skipped": 0
+      },
+      "monitor_rows": [
+        {
+          "timestamp": "2025-12-19T19:04:09.149376",
+          "type": "status",
+          "status": "error",
+          "table_name": "workflow_node",
+          "row_id": "301f16e2-0428-4232-866e-2fd1254115bd",
+          "message": "Failed to insert row 301f16e2-0428-4232-866e-2fd1254115bd into source"
+        },
+        {
+          "timestamp": "2025-12-19T19:04:09.290806",
+          "type": "status",
+          "status": "error",
+          "table_name": "workflow_node",
+          "row_id": "4f19eced-542f-47bd-b1df-f34b17404817",
+          "message": "Failed to insert row 4f19eced-542f-47bd-b1df-f34b17404817 into source"
+        },
+        {
+          "timestamp": "2025-12-19T19:04:09.432295",
+          "type": "status",
+          "status": "error",
+          "table_name": "workflow_node",
+          "row_id": "eef0155c-f108-4534-a342-f7191f4acdf8",
+          "message": "Failed to insert row eef0155c-f108-4534-a342-f7191f4acdf8 into source"
+        },
+        {
+          "timestamp": "2025-12-19T19:04:09.569602",
+          "type": "status",
+          "status": "error",
+          "table_name": "workflow_node",
+          "row_id": "42834af2-2b7d-4e9b-8957-2de4cb1673b5",
+          "message": "Failed to insert row 42834af2-2b7d-4e9b-8957-2de4cb1673b5 into source"
+        },
+        {
+          "timestamp": "2025-12-19T19:04:09.725454",
+          "type": "status",
+          "status": "error",
+          "table_name": "workflow_node",
+          "row_id": "09722360-3fb6-4aa9-aed6-c49de9e478e7",
+          "message": "Failed to insert row 09722360-3fb6-4aa9-aed6-c49de9e478e7 into source"
+        },
+        {
+          "timestamp": "2025-12-19T19:04:09.903384",
+          "type": "status",
+          "status": "error",
+          "table_name": "workflow_node",
+          "row_id": "bc63ecdd-5763-4940-aeb9-22a4ef6a2129",
+          "message": "Failed to insert row bc63ecdd-5763-4940-aeb9-22a4ef6a2129 into source"
+        },
+        {
+          "timestamp": "2025-12-19T19:04:10.046936",
+          "type": "status",
+          "status": "error",
+          "table_name": "workflow_node",
+          "row_id": "919cd577-24eb-43b6-8c3f-b7ca540c3145",
+          "message": "Failed to insert row 919cd577-24eb-43b6-8c3f-b7ca540c3145 into source"
+        },
+        {
+          "timestamp": "2025-12-19T19:04:10.184110",
+          "type": "status",
+          "status": "error",
+          "table_name": "workflow_node",
+          "row_id": "8575ae3a-eb42-4390-a36d-589614122ab6",
+          "message": "Failed to insert row 8575ae3a-eb42-4390-a36d-589614122ab6 into source"
+        },
+        {
+          "timestamp": "2025-12-19T19:04:10.324275",
+          "type": "status",
+          "status": "error",
+          "table_name": "workflow_node",
+          "row_id": "3aa6d8ef-b908-4062-9435-de64c4b5f19e",
+          "message": "Failed to insert row 3aa6d8ef-b908-4062-9435-de64c4b5f19e into source"
+        },
+        {
+          "timestamp": "2025-12-19T19:04:10.468293",
+          "type": "status",
+          "status": "error",
+          "table_name": "workflow_node",
+          "row_id": "e7ca09cb-c39a-45e2-8db6-ded133941493",
+          "message": "Failed to insert row e7ca09cb-c39a-45e2-8db6-ded133941493 into source"
+        },
+        {
+          "timestamp": "2025-12-19T19:04:10.628860",
+          "type": "status",
+          "status": "error",
+          "table_name": "workflow_node",
+          "row_id": "c98b13b3-a939-4cd4-829a-ec82be7539ce",
+          "message": "Failed to insert row c98b13b3-a939-4cd4-829a-ec82be7539ce into source"
+        },
+        {
+          "timestamp": "2025-12-19T19:04:10.775065",
+          "type": "status",
+          "status": "error",
+          "table_name": "workflow_node",
+          "row_id": "82668258-8f60-4ee9-8c91-375be76b5f52",
+          "message": "Failed to insert row 82668258-8f60-4ee9-8c91-375be76b5f52 into source"
+        },
+        {
+          "timestamp": "2025-12-19T19:04:10.955584",
+          "type": "status",
+          "status": "error",
+          "table_name": "workflow_node",
+          "row_id": "f431ce34-e61e-496e-bb66-a7d37267c00e",
+          "message": "Failed to insert row f431ce34-e61e-496e-bb66-a7d37267c00e into source"
+        },
+        {
+          "timestamp": "2025-12-19T19:04:11.091958",
+          "type": "status",
+          "status": "error",
+          "table_name": "workflow_node",
+          "row_id": "acbedb0b-9a11-46af-bd22-d62350755460",
+          "message": "Failed to insert row acbedb0b-9a11-46af-bd22-d62350755460 into source"
+        },
+        {
+          "timestamp": "2025-12-19T19:04:11.231258",
+          "type": "status",
+          "status": "error",
+          "table_name": "workflow_node",
+          "row_id": "4e083d87-2b30-4861-a66d-053f77654fdf",
+          "message": "Failed to insert row 4e083d87-2b30-4861-a66d-053f77654fdf into source"
+        },
+        {
+          "timestamp": "2025-12-19T19:04:11.379558",
+          "type": "status",
+          "status": "error",
+          "table_name": "workflow_node",
+          "row_id": "5a1bfac0-6379-430e-b321-3b4f2411ecb9",
+          "message": "Failed to insert row 5a1bfac0-6379-430e-b321-3b4f2411ecb9 into source"
+        },
+        {
+          "timestamp": "2025-12-19T19:04:11.520130",
+          "type": "status",
+          "status": "error",
+          "table_name": "workflow_node",
+          "row_id": "ae7bb30f-6d95-440e-8f23-8539e11c3f95",
+          "message": "Failed to insert row ae7bb30f-6d95-440e-8f23-8539e11c3f95 into source"
+        },
+        {
+          "timestamp": "2025-12-19T19:04:11.679442",
+          "type": "status",
+          "status": "error",
+          "table_name": "workflow_node",
+          "row_id": "15538f18-ad20-44c7-89f7-41116e5f7ba6",
+          "message": "Failed to insert row 15538f18-ad20-44c7-89f7-41116e5f7ba6 into source"
+        },
+        {
+          "timestamp": "2025-12-19T19:04:14.250431",
+          "type": "status",
+          "status": "success",
+          "table_name": "project_member",
+          "row_id": "6dcdf9c4-fe6a-4a19-97c5-871ff7525ea4",
+          "message": "Synced to target"
+        },
+        {
+          "timestamp": "2025-12-19T19:04:14.676334",
+          "type": "status",
+          "status": "success",
+          "table_name": "project_member",
+          "row_id": "431e1010-7b0f-453e-bf19-b8eb4cc13d73",
+          "message": "Synced to target"
+        }
+      ]
+    }
+  }
+}

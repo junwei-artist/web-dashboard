@@ -1,0 +1,10 @@
+routes:
+  en0:
+    enabled: true
+    target_ip: 10.3.20.26
+    gateway: 10.5.216.1
+    interface_ip: 10.5.216.181
+    timestamp: '2025-12-19T10:43:03.724517'
+last_updated: '2025-12-19T10:43:03.724555'
+total_routes: 1
+active_routes: 1

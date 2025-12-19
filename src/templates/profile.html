@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+
+{% block title %}Profile{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12 col-md-8 col-lg-6 mx-auto">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1><i class="fas fa-user-circle"></i> User Profile</h1>
+            </div>
+
+            <!-- User Information Card -->
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i>User Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-sm-4"><strong>Username:</strong></div>
+                        <div class="col-sm-8">
+                            <code>{{ current_user.username }}</code>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-sm-4"><strong>Role:</strong></div>
+                        <div class="col-sm-8">
+                            <span class="badge bg-{{ 'danger' if current_user.is_admin() else 'secondary' }}">
+                                {{ current_user.role|title }}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-4"><strong>Permissions:</strong></div>
+                        <div class="col-sm-8">
+                            {% if current_user.is_admin() %}
+                                <span class="badge bg-success">Full Access</span>
+                            {% else %}
+                                <span class="badge bg-info">Read Only</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Change Password Card -->
+            <div class="card">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0"><i class="fas fa-key me-2"></i>Change Password</h5>
+                </div>
+                <div class="card-body">
+                    <form id="changePasswordForm">
+                        <div class="mb-3">
+                            <label for="oldPassword" class="form-label">
+                                <i class="fas fa-lock me-1"></i>Current Password
+                            </label>
+                            <input type="password" class="form-control" id="oldPassword" name="old_password" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="newPassword" class="form-label">
+                                <i class="fas fa-key me-1"></i>New Password
+                            </label>
+                            <input type="password" class="form-control" id="newPassword" name="new_password" required minlength="6">
+                            <small class="form-text text-muted">Password must be at least 6 characters long</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="confirmPassword" class="form-label">
+                                <i class="fas fa-check-circle me-1"></i>Confirm New Password
+                            </label>
+                            <input type="password" class="form-control" id="confirmPassword" name="confirm_password" required minlength="6">
+                        </div>
+                        
+                        <div id="passwordAlert" style="display: none;"></div>
+                        
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-1"></i>Change Password
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('changePasswordForm');
+    const alertDiv = document.getElementById('passwordAlert');
+    
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const oldPassword = document.getElementById('oldPassword').value;
+        const newPassword = document.getElementById('newPassword').value;
+        const confirmPassword = document.getElementById('confirmPassword').value;
+        
+        // Client-side validation
+        if (newPassword !== confirmPassword) {
+            showAlert('New passwords do not match', 'danger');
+            return;
+        }
+        
+        if (newPassword.length < 6) {
+            showAlert('New password must be at least 6 characters long', 'danger');
+            return;
+        }
+        
+        // Disable submit button
+        const submitBtn = form.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Changing...';
+        
+        // Send request
+        fetch('/api/profile/change-password', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                old_password: oldPassword,
+                new_password: newPassword,
+                confirm_password: confirmPassword
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showAlert(data.message, 'success');
+                form.reset();
+            } else {
+                showAlert(data.error || 'Failed to change password', 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Error changing password:', error);
+            showAlert('An error occurred while changing password', 'danger');
+        })
+        .finally(() => {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText;
+        });
+    });
+    
+    function showAlert(message, type) {
+        alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+        alertDiv.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        alertDiv.style.display = 'block';
+        
+        // Auto-hide after 5 seconds
+        setTimeout(() => {
+            if (alertDiv.parentNode) {
+                alertDiv.style.display = 'none';
+            }
+        }, 5000);
+    }
+});
+</script>
+{% endblock %}
+

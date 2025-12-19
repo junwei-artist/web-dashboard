@@ -3,9 +3,12 @@ README.md
 requirements.txt
 setup.py
 src/__init__.py
+src/auth.py
 src/backend.py
 src/config_manager.py
 src/frontend.py
+src/postgres_sync_manager.py
+src/rsync_manager.py
 src/static/.DS_Store
 src/templates/403.html
 src/templates/404.html
@@ -15,8 +18,12 @@ src/templates/clients.html
 src/templates/config.html
 src/templates/dashboard.html
 src/templates/databases.html
+src/templates/login.html
+src/templates/network-interfaces.html
 src/templates/ports.html
+src/templates/postgres-sync.html
 src/templates/proxy-detection.html
+src/templates/rsync.html
 src/templates/services.html
 src/templates/system.html
 system_monitor_dashboard.egg-info/PKG-INFO

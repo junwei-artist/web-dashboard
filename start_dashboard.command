@@ -139,7 +139,7 @@ start_application() {
     print_status "Press Ctrl+C to stop the server"
     echo ""
     
-    # Start the application
+    # Start the application (use venv's python which should be 3.10)
     python main.py --port $port
 }
 

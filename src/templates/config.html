@@ -8,7 +8,7 @@
         <div class="col-12">
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h1><i class="fas fa-cog"></i> Configuration Management</h1>
-                <button class="btn btn-outline-primary" onclick="reloadConfig()">
+                <button class="btn btn-outline-primary" onclick="reloadConfig()" data-requires-edit>
                     <i class="fas fa-sync-alt"></i> Reload Config
                 </button>
             </div>
@@ -27,7 +27,7 @@
                         <div class="col-md-6">
                             <div class="form-check form-switch mb-3">
                                 <input class="form-check-input" type="checkbox" id="ipRestrictionToggle" 
-                                       onchange="toggleIPRestriction()">
+                                       onchange="toggleIPRestriction()" data-requires-edit>
                                 <label class="form-check-label" for="ipRestrictionToggle">
                                     Enable IP Restriction
                                 </label>
@@ -64,7 +64,7 @@
                             <div class="input-group">
                                 <input type="text" class="form-control" id="newIP" 
                                        placeholder="Enter IP address or CIDR block (e.g., 192.168.1.0/24)">
-                                <button class="btn btn-success" onclick="addAllowedIP()">
+                                <button class="btn btn-success" onclick="addAllowedIP()" data-requires-edit>
                                     <i class="fas fa-plus"></i> Add IP
                                 </button>
                             </div>
@@ -237,7 +237,7 @@ function updateAllowedIPsTable() {
             <td><code>${ip}</code></td>
             <td><span class="badge bg-${type === 'CIDR Block' ? 'info' : 'primary'}">${type}</span></td>
             <td>
-                <button class="btn btn-sm btn-outline-danger" onclick="removeAllowedIP('${ip}')">
+                <button class="btn btn-sm btn-outline-danger" onclick="removeAllowedIP('${ip}')" data-requires-edit>
                     <i class="fas fa-trash"></i> Remove
                 </button>
             </td>

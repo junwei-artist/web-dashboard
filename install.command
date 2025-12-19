@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # System Monitor Web Dashboard - Installation Script
-# This script checks for Python 3.13, installs it if needed, creates venv, and sets up the project
+# This script checks for Python 3.10, installs it if needed, creates venv, and sets up the project
 
 echo "=================================================="
 echo "🚀 System Monitor Web Dashboard - Installation"
@@ -13,35 +13,36 @@ cd "$SCRIPT_DIR"
 
 echo "[INFO] Working directory: $SCRIPT_DIR"
 
-# Function to check if Python 3.13 is installed
-check_python313() {
-    echo "[INFO] Checking for Python 3.13..."
+# Function to check if Python 3.10 is installed
+check_python310() {
+    echo "[INFO] Checking for Python 3.10..."
     
-    # Check if python3.13 exists
-    if command -v python3.13 &> /dev/null; then
-        PYTHON_VERSION=$(python3.13 --version 2>&1)
+    # Check if python3.10 exists
+    if command -v python3.10 &> /dev/null; then
+        PYTHON_VERSION=$(python3.10 --version 2>&1)
         echo "[INFO] ✅ Found Python: $PYTHON_VERSION"
         return 0
     fi
     
-    # Check if python3 exists and is version 3.13
+    # Check if python3 exists and is version 3.10
     if command -v python3 &> /dev/null; then
         PYTHON_VERSION=$(python3 --version 2>&1)
-        if [[ $PYTHON_VERSION == *"3.13"* ]]; then
+        PYTHON_MAJOR_MINOR=$(python3 --version 2>&1 | grep -oE '[0-9]+\.[0-9]+')
+        if [[ "$PYTHON_MAJOR_MINOR" == "3.10" ]]; then
             echo "[INFO] ✅ Found Python: $PYTHON_VERSION"
             return 0
         else
-            echo "[INFO] ⚠️  Found Python: $PYTHON_VERSION (not 3.13)"
+            echo "[INFO] ⚠️  Found Python: $PYTHON_VERSION (not 3.10)"
         fi
     fi
     
-    echo "[INFO] ❌ Python 3.13 not found"
+    echo "[INFO] ❌ Python 3.10 not found"
     return 1
 }
 
-# Function to install Python 3.13 using Homebrew
-install_python313() {
-    echo "[INFO] Installing Python 3.13..."
+# Function to install Python 3.10 using Homebrew
+install_python310() {
+    echo "[INFO] Installing Python 3.10..."
     
     # Check if Homebrew is installed
     if ! command -v brew &> /dev/null; then
@@ -51,21 +52,21 @@ install_python313() {
         exit 1
     fi
     
-    echo "[INFO] Installing Python 3.13 using Homebrew..."
-    brew install python@3.13
+    echo "[INFO] Installing Python 3.10 using Homebrew..."
+    brew install python@3.10
     
     if [ $? -eq 0 ]; then
-        echo "[INFO] ✅ Python 3.13 installed successfully"
+        echo "[INFO] ✅ Python 3.10 installed successfully"
         
-        # Add Python 3.13 to PATH if needed
-        PYTHON313_PATH="/opt/homebrew/bin/python3.13"
-        if [ -f "$PYTHON313_PATH" ]; then
-            echo "[INFO] Python 3.13 available at: $PYTHON313_PATH"
+        # Add Python 3.10 to PATH if needed
+        PYTHON310_PATH="/opt/homebrew/bin/python3.10"
+        if [ -f "$PYTHON310_PATH" ]; then
+            echo "[INFO] Python 3.10 available at: $PYTHON310_PATH"
         fi
         
         return 0
     else
-        echo "[ERROR] Failed to install Python 3.13"
+        echo "[ERROR] Failed to install Python 3.10"
         exit 1
     fi
 }
@@ -81,14 +82,14 @@ create_venv() {
     fi
     
     # Create new virtual environment
-    if command -v python3.13 &> /dev/null; then
-        python3.13 -m venv venv
+    if command -v python3.10 &> /dev/null; then
+        python3.10 -m venv venv
     elif command -v python3 &> /dev/null; then
-        PYTHON_VERSION=$(python3 --version 2>&1)
-        if [[ $PYTHON_VERSION == *"3.13"* ]]; then
+        PYTHON_MAJOR_MINOR=$(python3 --version 2>&1 | grep -oE '[0-9]+\.[0-9]+')
+        if [[ "$PYTHON_MAJOR_MINOR" == "3.10" ]]; then
             python3 -m venv venv
         else
-            echo "[ERROR] Python 3.13 not available for virtual environment creation"
+            echo "[ERROR] Python 3.10 not available for virtual environment creation"
             exit 1
         fi
     else
@@ -180,10 +181,10 @@ verify_installation() {
 main() {
     echo "[INFO] Starting installation process..."
     
-    # Step 1: Check Python 3.13
-    if ! check_python313; then
-        echo "[INFO] Python 3.13 not found, attempting to install..."
-        install_python313
+    # Step 1: Check Python 3.10
+    if ! check_python310; then
+        echo "[INFO] Python 3.10 not found, attempting to install..."
+        install_python310
     fi
     
     # Step 2: Create virtual environment

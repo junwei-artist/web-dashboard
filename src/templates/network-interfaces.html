@@ -1,0 +1,1740 @@
+{% extends "base.html" %}
+
+{% block title %}Network Interfaces - System Monitor{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">
+            <i class="fas fa-network-wired me-2"></i>Network Interfaces & Routing
+            <small class="text-muted">Manage interfaces and routes</small>
+        </h1>
+    </div>
+</div>
+
+<!-- Network Interfaces Section -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-ethernet me-2"></i>Network Interfaces
+                    <button class="btn btn-sm btn-outline-light float-end" onclick="refreshInterfaces()">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="interfaces-list">
+                    <i class="fas fa-spinner fa-spin"></i> Loading interfaces...
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- IP Test List Section -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-list me-2"></i>Test IP List
+                </h5>
+                <div>
+                    <button class="btn btn-sm btn-outline-light me-2" onclick="reloadConfigs()" title="Reload from YAML" data-requires-edit>
+                        <i class="fas fa-sync-alt"></i> Reload
+                    </button>
+                    <button class="btn btn-sm btn-outline-light" onclick="saveConfigs()" title="Save to YAML" data-requires-edit>
+                        <i class="fas fa-save"></i> Save
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="input-group mb-3">
+                    <input type="text" class="form-control" id="new-ip-input" placeholder="Enter IP address (e.g., 8.8.8.8)" onkeypress="if(event.key==='Enter') addTestIP()">
+                    <button class="btn btn-primary" onclick="addTestIP()" data-requires-edit>
+                        <i class="fas fa-plus"></i> Add IP
+                    </button>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Select Interface for Traceroute:</label>
+                        <select class="form-select" id="traceroute-interface-select">
+                            <option value="">Default (All Interfaces)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">&nbsp;</label>
+                        <button class="btn btn-info w-100" onclick="tracerouteSelectedIP()">
+                            <i class="fas fa-route"></i> Traceroute Selected IP
+                        </button>
+                    </div>
+                </div>
+                <div class="alert alert-info">
+                    <small><i class="fas fa-info-circle"></i> 
+                    <strong>Traceroute:</strong> Traces the network path to an IP address, showing each hop (router) along the way. 
+                    Helps identify where network connectivity fails and at which layer (Local, Layer 2/3, Network, Application).</small>
+                </div>
+                <div id="test-ip-list">
+                    <i class="fas fa-spinner fa-spin"></i> Loading IP list...
+                </div>
+                <div id="traceroute-results" class="mt-3">
+                    <!-- Traceroute results will appear here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Connection Testing Section -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-vial me-2"></i>Connection Testing
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Select Interface:</label>
+                        <select class="form-select" id="test-interface-select">
+                            <option value="">All Interfaces (Test through each)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-8 mb-3">
+                        <label class="form-label">&nbsp;</label>
+                        <button class="btn btn-success w-100" onclick="testAllIPs()">
+                            <i class="fas fa-play"></i> Test All IPs
+                        </button>
+                    </div>
+                </div>
+                <div class="alert alert-info">
+                    <small><i class="fas fa-info-circle"></i> 
+                    If no interface is selected, each IP will be tested through all available interfaces.</small>
+                </div>
+                <div id="test-results" class="mt-3">
+                    <!-- Test results will appear here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- URL Test List Section -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-link me-2"></i>URL Test List (Curl)
+                </h5>
+                <div>
+                    <button class="btn btn-sm btn-outline-dark me-2" onclick="reloadConfigs()" title="Reload from YAML" data-requires-edit>
+                        <i class="fas fa-sync-alt"></i> Reload
+                    </button>
+                    <button class="btn btn-sm btn-outline-dark" onclick="saveConfigs()" title="Save to YAML" data-requires-edit>
+                        <i class="fas fa-save"></i> Save
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="input-group mb-3">
+                    <input type="text" class="form-control" id="new-url-input" placeholder="Enter URL (e.g., http://10.3.20.26:4899/)" onkeypress="if(event.key==='Enter') addTestURL()">
+                    <button class="btn btn-warning" onclick="addTestURL()" data-requires-edit>
+                        <i class="fas fa-plus"></i> Add URL
+                    </button>
+                </div>
+                <div id="test-url-list">
+                    <i class="fas fa-spinner fa-spin"></i> Loading URL list...
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- URL Connection Testing Section -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0">
+                    <i class="fas fa-globe me-2"></i>URL Connection Testing (Curl)
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Select Interface:</label>
+                        <select class="form-select" id="test-url-interface-select">
+                            <option value="">All Interfaces (Test through each)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-8 mb-3">
+                        <label class="form-label">&nbsp;</label>
+                        <button class="btn btn-warning w-100" onclick="testAllURLs()">
+                            <i class="fas fa-play"></i> Test All URLs
+                        </button>
+                    </div>
+                </div>
+                <div class="alert alert-info">
+                    <small><i class="fas fa-info-circle"></i> 
+                    Tests URLs using curl with --interface flag. If no interface is selected, each URL will be tested through all available interfaces.</small>
+                </div>
+                <div id="url-test-results" class="mt-3">
+                    <!-- URL test results will appear here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- System Routes Section -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-secondary text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-route me-2"></i>All System Routes
+                    <button class="btn btn-sm btn-outline-light float-end" onclick="refreshSystemRoutes()">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> 
+                    <strong>Route Flags Explanation:</strong> Each route has flags that indicate its properties. 
+                    Hover over the flags column to see detailed explanations.
+                </div>
+                <div id="system-routes">
+                    <i class="fas fa-spinner fa-spin"></i> Loading system routes...
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Route Management Section -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-route me-2"></i>Route Management
+                </h5>
+                <div>
+                    <button class="btn btn-sm btn-outline-dark me-2" onclick="reloadConfigs()" title="Reload from YAML" data-requires-edit>
+                        <i class="fas fa-sync-alt"></i> Reload
+                    </button>
+                    <button class="btn btn-sm btn-outline-dark" onclick="saveConfigs()" title="Save to YAML" data-requires-edit>
+                        <i class="fas fa-save"></i> Save
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Interface:</label>
+                        <select class="form-select" id="route-interface-select">
+                            <option value="">Select Interface</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Target IP/Network:</label>
+                        <input type="text" class="form-control" id="route-target-ip" placeholder="e.g., 8.8.8.8 or 0.0.0.0/0">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Gateway (Optional):</label>
+                        <input type="text" class="form-control" id="route-gateway" placeholder="e.g., 192.168.1.1">
+                    </div>
+                </div>
+                <button class="btn btn-warning" onclick="setRoute()" data-requires-edit>
+                    <i class="fas fa-plus"></i> Set Route
+                </button>
+                <div id="route-status" class="mt-3">
+                    <!-- Route status will appear here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Route Monitor Section -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-dark text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-chart-line me-2"></i>Route Monitor
+                    <button class="btn btn-sm btn-outline-light float-end" onclick="refreshRouteMonitor()">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="route-monitor">
+                    <i class="fas fa-spinner fa-spin"></i> Loading route monitor...
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let interfaces = [];
+let testIPs = [];
+
+// Load initial data
+document.addEventListener('DOMContentLoaded', function() {
+    refreshInterfaces();
+    loadTestIPList();
+    loadTestURLList();
+    refreshRouteMonitor();
+    refreshSystemRoutes();
+});
+
+function refreshInterfaces() {
+    fetch('/api/network-interfaces')
+        .then(response => response.json())
+        .then(data => {
+            interfaces = data;
+            displayInterfaces(data);
+            updateInterfaceSelects(data);
+        })
+        .catch(error => {
+            console.error('Error loading interfaces:', error);
+            document.getElementById('interfaces-list').innerHTML = 
+                '<div class="alert alert-danger">Error loading interfaces</div>';
+        });
+}
+
+function displayInterfaces(interfaces) {
+    const container = document.getElementById('interfaces-list');
+    if (interfaces.length === 0) {
+        container.innerHTML = '<p class="text-muted">No interfaces found</p>';
+        return;
+    }
+    
+    let html = '<div class="table-responsive"><table class="table table-striped">';
+    html += '<thead><tr><th>Name</th><th>Type</th><th>Status</th><th>Addresses</th><th>Speed</th><th>MTU</th></tr></thead><tbody>';
+    
+    interfaces.forEach(iface => {
+        const statusBadge = iface.is_up 
+            ? '<span class="badge bg-success">UP</span>' 
+            : '<span class="badge bg-danger">DOWN</span>';
+        
+        const addresses = iface.addresses.map(addr => 
+            `<span class="badge bg-secondary me-1">${addr.address}</span>`
+        ).join('');
+        
+        const speed = iface.speed > 0 ? `${iface.speed} Mbps` : 'N/A';
+        
+        html += `
+            <tr>
+                <td><code>${iface.name}</code></td>
+                <td>${iface.type}</td>
+                <td>${statusBadge}</td>
+                <td>${addresses || 'N/A'}</td>
+                <td>${speed}</td>
+                <td>${iface.mtu || 'N/A'}</td>
+            </tr>
+        `;
+    });
+    
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+}
+
+function updateInterfaceSelects(interfaces) {
+    const testSelect = document.getElementById('test-interface-select');
+    const testUrlSelect = document.getElementById('test-url-interface-select');
+    const tracerouteSelect = document.getElementById('traceroute-interface-select');
+    const routeSelect = document.getElementById('route-interface-select');
+    
+    // Clear existing options (except first one)
+    testSelect.innerHTML = '<option value="">All Interfaces (Test through each)</option>';
+    if (testUrlSelect) {
+        testUrlSelect.innerHTML = '<option value="">All Interfaces (Test through each)</option>';
+    }
+    if (tracerouteSelect) {
+        tracerouteSelect.innerHTML = '<option value="">Default (All Interfaces)</option>';
+    }
+    routeSelect.innerHTML = '<option value="">Select Interface</option>';
+    
+    interfaces.forEach(iface => {
+        if (iface.is_up && iface.type !== 'Loopback') {
+            const option1 = document.createElement('option');
+            option1.value = iface.name;
+            option1.textContent = `${iface.name} (${iface.type})`;
+            testSelect.appendChild(option1);
+            
+            if (testUrlSelect) {
+                const option2 = document.createElement('option');
+                option2.value = iface.name;
+                option2.textContent = `${iface.name} (${iface.type})`;
+                testUrlSelect.appendChild(option2);
+            }
+            
+            if (tracerouteSelect) {
+                const option3 = document.createElement('option');
+                option3.value = iface.name;
+                option3.textContent = `${iface.name} (${iface.type})`;
+                tracerouteSelect.appendChild(option3);
+            }
+            
+            const option4 = document.createElement('option');
+            option4.value = iface.name;
+            option4.textContent = `${iface.name} (${iface.type})`;
+            routeSelect.appendChild(option4);
+        }
+    });
+}
+
+function loadTestIPList() {
+    fetch('/api/test-ips')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            testIPs = data.ips || [];
+            displayTestIPList(testIPs);
+        })
+        .catch(error => {
+            console.error('Error loading test IPs:', error);
+            document.getElementById('test-ip-list').innerHTML = 
+                '<div class="alert alert-danger">Error loading IP list: ' + error.message + '</div>';
+        });
+}
+
+function displayTestIPList(ips) {
+    const container = document.getElementById('test-ip-list');
+    if (ips.length === 0) {
+        container.innerHTML = '<p class="text-muted">No IPs in test list. Add IPs above.</p>';
+        return;
+    }
+    
+    let html = '<ul class="list-group">';
+    ips.forEach(ip => {
+        html += `
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                <div>
+                    <code class="me-2">${ip}</code>
+                    <button class="btn btn-sm btn-primary me-2" onclick="testIPAllInterfaces('${ip}')" title="Test this IP through all interfaces">
+                        <i class="fas fa-vial"></i> Test All Interfaces
+                    </button>
+                    <button class="btn btn-sm btn-info" onclick="tracerouteIP('${ip}')" title="Traceroute to this IP">
+                        <i class="fas fa-route"></i> Traceroute
+                    </button>
+                </div>
+                <button class="btn btn-sm btn-danger" onclick="removeTestIP('${ip}')" data-requires-edit>
+                    <i class="fas fa-trash"></i> Remove
+                </button>
+            </li>
+        `;
+    });
+    html += '</ul>';
+    container.innerHTML = html;
+    
+    // Add results container if it doesn't exist
+    if (!document.getElementById('ip-test-results-container')) {
+        const resultsContainer = document.createElement('div');
+        resultsContainer.id = 'ip-test-results-container';
+        resultsContainer.className = 'mt-3';
+        container.parentElement.appendChild(resultsContainer);
+    }
+}
+
+function addTestIP() {
+    const ipInput = document.getElementById('new-ip-input');
+    const ip = ipInput.value.trim();
+    
+    if (!ip) {
+        alert('Please enter an IP address');
+        return;
+    }
+    
+    // Basic client-side validation
+    const ipPattern = /^([0-9]{1,3}\.){3}[0-9]{1,3}$|^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$|^([0-9a-fA-F]{1,4}:)*::([0-9a-fA-F]{1,4}:)*[0-9a-fA-F]{1,4}$/;
+    if (!ipPattern.test(ip) && ip !== 'localhost') {
+        alert('Please enter a valid IP address (IPv4 or IPv6)');
+        return;
+    }
+    
+    fetch('/api/test-ips', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ip: ip})
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(data => {
+                throw new Error(data.error || `HTTP ${response.status}: ${response.statusText}`);
+            });
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.error) {
+            alert('Error: ' + data.error);
+        } else {
+            ipInput.value = '';
+            loadTestIPList();
+            // Show success message
+            const successMsg = document.createElement('div');
+            successMsg.className = 'alert alert-success alert-dismissible fade show mt-2';
+            successMsg.innerHTML = `<i class="fas fa-check-circle"></i> ${data.message || 'IP added successfully'}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
+            document.getElementById('test-ip-list').parentElement.insertBefore(successMsg, document.getElementById('test-ip-list'));
+            setTimeout(() => successMsg.remove(), 3000);
+        }
+    })
+    .catch(error => {
+        console.error('Error adding IP:', error);
+        alert('Error adding IP address: ' + error.message);
+    });
+}
+
+function removeTestIP(ip) {
+    if (!confirm(`Remove ${ip} from test list?`)) return;
+    
+    fetch('/api/test-ips', {
+        method: 'DELETE',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ip: ip})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            alert('Error: ' + data.error);
+        } else {
+            loadTestIPList();
+        }
+    })
+    .catch(error => {
+        console.error('Error removing IP:', error);
+        alert('Error removing IP address');
+    });
+}
+
+function testIPAllInterfaces(ip) {
+    const resultsContainer = document.getElementById('ip-test-results-container');
+    if (!resultsContainer) return;
+    
+    // Show loading state
+    resultsContainer.innerHTML = `
+        <div class="alert alert-info">
+            <i class="fas fa-spinner fa-spin"></i> Testing ${ip} through all interfaces...
+        </div>
+    `;
+    
+    fetch('/api/test-ip-all-interfaces', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ip: ip})
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        displayIPTestResults(data);
+    })
+    .catch(error => {
+        console.error('Error testing IP through all interfaces:', error);
+        resultsContainer.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle"></i> 
+                Error testing ${ip}: ${error.message}
+            </div>
+        `;
+    });
+}
+
+function displayIPTestResults(data) {
+    const resultsContainer = document.getElementById('ip-test-results-container');
+    if (!resultsContainer) return;
+    
+    const results = data.results || [];
+    const ip = data.ip || 'Unknown';
+    
+    if (results.length === 0) {
+        resultsContainer.innerHTML = `
+            <div class="alert alert-warning">
+                <i class="fas fa-info-circle"></i> No test results available for ${ip}
+            </div>
+        `;
+        return;
+    }
+    
+    // Count successful and failed tests
+    const successful = results.filter(r => r.success).length;
+    const failed = results.length - successful;
+    
+    let html = `
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h6 class="mb-0">
+                    <i class="fas fa-vial me-2"></i>Test Results for <code>${ip}</code>
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <span class="badge bg-success me-2">${successful} Successful</span>
+                    <span class="badge bg-danger me-2">${failed} Failed</span>
+                    <span class="badge bg-info">${results.length} Total Tests</span>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Interface</th>
+                                <th>Status</th>
+                                <th>Latency</th>
+                                <th>Error</th>
+                                <th>Timestamp</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+    `;
+    
+    results.forEach(result => {
+        const statusBadge = result.success 
+            ? '<span class="badge bg-success">Connected</span>' 
+            : '<span class="badge bg-danger">Failed</span>';
+        
+        const latency = result.latency_ms ? `${result.latency_ms.toFixed(2)} ms` : 'N/A';
+        const error = result.error || '-';
+        const timestamp = result.timestamp ? new Date(result.timestamp).toLocaleString() : 'N/A';
+        
+        // Highlight successful connections
+        const rowClass = result.success ? '' : 'table-warning';
+        
+        html += `
+            <tr class="${rowClass}">
+                <td><code>${result.interface || 'default'}</code></td>
+                <td>${statusBadge}</td>
+                <td>${latency}</td>
+                <td><small class="text-muted">${error}</small></td>
+                <td><small>${timestamp}</small></td>
+            </tr>
+        `;
+    });
+    
+    html += `
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    resultsContainer.innerHTML = html;
+}
+
+// Traceroute Functions
+function tracerouteIP(ip) {
+    const interface = document.getElementById('traceroute-interface-select').value;
+    const resultsDiv = document.getElementById('traceroute-results');
+    
+    resultsDiv.innerHTML = `
+        <div class="alert alert-info">
+            <i class="fas fa-spinner fa-spin"></i> Performing traceroute to ${ip}${interface ? ' via ' + interface : ''}...
+            <br><small>This may take up to 60 seconds</small>
+        </div>
+    `;
+    
+    fetch('/api/traceroute', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            ip: ip,
+            interface: interface || null
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        displayTracerouteResults(data);
+    })
+    .catch(error => {
+        console.error('Error performing traceroute:', error);
+        resultsDiv.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle"></i> 
+                Error performing traceroute: ${error.message}
+            </div>
+        `;
+    });
+}
+
+function tracerouteSelectedIP() {
+    // Use the global testIPs variable or fetch if not available
+    if (testIPs && testIPs.length > 0) {
+        const ip = testIPs[0];
+        if (testIPs.length > 1) {
+            const selectedIP = prompt(`Enter IP to traceroute (or leave blank for first IP: ${ip}):\nAvailable IPs: ${testIPs.join(', ')}`, ip);
+            if (selectedIP === null) return; // User cancelled
+            if (selectedIP && testIPs.includes(selectedIP)) {
+                tracerouteIP(selectedIP);
+            } else if (selectedIP) {
+                alert('IP not found in test list');
+            } else {
+                tracerouteIP(ip);
+            }
+        } else {
+            tracerouteIP(ip);
+        }
+    } else {
+        // Fetch IP list if not loaded
+        fetch('/api/test-ips')
+            .then(response => response.json())
+            .then(data => {
+                const currentIPs = data.ips || [];
+                if (currentIPs.length === 0) {
+                    alert('No IPs in test list. Please add an IP first.');
+                    return;
+                }
+                const ip = currentIPs[0];
+                tracerouteIP(ip);
+            })
+            .catch(error => {
+                console.error('Error getting IP list:', error);
+                alert('Error getting IP list');
+            });
+    }
+}
+
+function displayTracerouteResults(data) {
+    const resultsDiv = document.getElementById('traceroute-results');
+    
+    if (data.error && !data.hops) {
+        resultsDiv.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle"></i> 
+                <strong>Error:</strong> ${data.error}
+            </div>
+        `;
+        return;
+    }
+    
+    const hops = data.hops || [];
+    const totalHops = data.total_hops || 0;
+    const failedAtHop = data.failed_at_hop;
+    const failedLayer = data.failed_layer;
+    const success = data.success;
+    
+    let html = `
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h6 class="mb-0">
+                    <i class="fas fa-route me-2"></i>Traceroute Results for <code>${data.ip}</code>
+                    ${data.interface && data.interface !== 'default' ? `via <code>${data.interface}</code>` : ''}
+                </h6>
+            </div>
+            <div class="card-body">
+    `;
+    
+    // Summary information
+    html += `
+        <div class="row mb-3">
+            <div class="col-md-3">
+                <div class="card bg-primary text-white">
+                    <div class="card-body text-center p-2">
+                        <h5>${totalHops}</h5>
+                        <small>Total Hops</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card ${success ? 'bg-success' : 'bg-danger'} text-white">
+                    <div class="card-body text-center p-2">
+                        <h5>${success ? 'Success' : 'Failed'}</h5>
+                        <small>Status</small>
+                    </div>
+                </div>
+            </div>
+            ${failedAtHop ? `
+            <div class="col-md-3">
+                <div class="card bg-warning text-dark">
+                    <div class="card-body text-center p-2">
+                        <h5>Hop ${failedAtHop}</h5>
+                        <small>Failed At</small>
+                    </div>
+                </div>
+            </div>
+            ` : ''}
+            ${failedLayer ? `
+            <div class="col-md-3">
+                <div class="card bg-danger text-white">
+                    <div class="card-body text-center p-2">
+                        <h6 style="font-size: 0.9rem;">${failedLayer}</h6>
+                        <small>Failure Layer</small>
+                    </div>
+                </div>
+            </div>
+            ` : ''}
+        </div>
+    `;
+    
+    // Layer explanation
+    if (failedLayer) {
+        html += `
+            <div class="alert alert-warning">
+                <i class="fas fa-info-circle"></i> 
+                <strong>Failure Analysis:</strong> ${failedLayer}
+                <br><small>
+                    <strong>Layer Explanation:</strong><br>
+                    • <strong>Local:</strong> Issue with local network configuration or interface<br>
+                    • <strong>Layer 2/3:</strong> Data link or network layer issue (first hop problems)<br>
+                    • <strong>Layer 3:</strong> Network/routing layer failure (intermediate routing issues)<br>
+                    • <strong>Layer 3/4:</strong> Network/transport layer (routing or firewall blocking)<br>
+                    • <strong>Application:</strong> Reached target but application/service may be down
+                </small>
+            </div>
+        `;
+    }
+    
+    // Hops table
+    if (hops.length > 0) {
+        html += `
+            <h6>Network Path:</h6>
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Hop</th>
+                            <th>Hostname</th>
+                            <th>IP Address</th>
+                            <th>Response Times</th>
+                            <th>Avg Time</th>
+                            <th>Status</th>
+                            <th>Explanation</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+        
+        hops.forEach((hop, index) => {
+            const statusBadge = hop.reached 
+                ? '<span class="badge bg-success">Reached</span>' 
+                : '<span class="badge bg-danger">Timeout</span>';
+            
+            const times = hop.times_ms && hop.times_ms.length > 0
+                ? hop.times_ms.map(t => `${t.toFixed(2)}ms`).join(', ')
+                : 'N/A';
+            
+            const avgTime = hop.avg_time_ms ? `${hop.avg_time_ms.toFixed(2)} ms` : 'N/A';
+            
+            // Highlight failed hops
+            const rowClass = hop.reached ? '' : 'table-warning';
+            
+            html += `
+                <tr class="${rowClass}">
+                    <td><strong>${hop.hop_number}</strong></td>
+                    <td><code>${hop.hostname}</code></td>
+                    <td><code>${hop.ip}</code></td>
+                    <td><small>${times}</small></td>
+                    <td>${avgTime}</td>
+                    <td>${statusBadge}</td>
+                    <td><small class="text-muted">${hop.explanation}</small></td>
+                </tr>
+            `;
+        });
+        
+        html += `
+                    </tbody>
+                </table>
+            </div>
+        `;
+    } else {
+        html += `
+            <div class="alert alert-warning">
+                <i class="fas fa-info-circle"></i> No hops found in traceroute output.
+                ${data.error ? `<br><strong>Error:</strong> ${data.error}` : ''}
+            </div>
+        `;
+    }
+    
+    html += `
+            </div>
+        </div>
+    `;
+    
+    resultsDiv.innerHTML = html;
+}
+
+// URL List Management Functions
+function loadTestURLList() {
+    fetch('/api/test-urls')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            testURLs = data.urls || [];
+            displayTestURLList(testURLs);
+        })
+        .catch(error => {
+            console.error('Error loading test URLs:', error);
+            document.getElementById('test-url-list').innerHTML = 
+                '<div class="alert alert-danger">Error loading URL list: ' + error.message + '</div>';
+        });
+}
+
+function displayTestURLList(urls) {
+    const container = document.getElementById('test-url-list');
+    if (urls.length === 0) {
+        container.innerHTML = '<p class="text-muted">No URLs in test list. Add URLs above.</p>';
+        return;
+    }
+    
+    let html = '<ul class="list-group">';
+    urls.forEach(url => {
+        html += `
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                <div>
+                    <code class="me-2">${url}</code>
+                    <button class="btn btn-sm btn-warning" onclick="testURLAllInterfaces('${url}')" title="Test this URL through all interfaces">
+                        <i class="fas fa-vial"></i> Test All Interfaces
+                    </button>
+                </div>
+                <button class="btn btn-sm btn-danger" onclick="removeTestURL('${url}')" data-requires-edit>
+                    <i class="fas fa-trash"></i> Remove
+                </button>
+            </li>
+        `;
+    });
+    html += '</ul>';
+    container.innerHTML = html;
+    
+    // Add results container if it doesn't exist
+    if (!document.getElementById('url-test-results-container')) {
+        const resultsContainer = document.createElement('div');
+        resultsContainer.id = 'url-test-results-container';
+        resultsContainer.className = 'mt-3';
+        container.parentElement.appendChild(resultsContainer);
+    }
+}
+
+function addTestURL() {
+    const urlInput = document.getElementById('new-url-input');
+    const url = urlInput.value.trim();
+    
+    if (!url) {
+        alert('Please enter a URL');
+        return;
+    }
+    
+    // Basic URL validation
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        alert('URL must start with http:// or https://');
+        return;
+    }
+    
+    fetch('/api/test-urls', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({url: url})
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(data => {
+                throw new Error(data.error || `HTTP ${response.status}: ${response.statusText}`);
+            });
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.error) {
+            alert('Error: ' + data.error);
+        } else {
+            urlInput.value = '';
+            loadTestURLList();
+            const successMsg = document.createElement('div');
+            successMsg.className = 'alert alert-success alert-dismissible fade show mt-2';
+            successMsg.innerHTML = `<i class="fas fa-check-circle"></i> ${data.message || 'URL added successfully'}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
+            document.getElementById('test-url-list').parentElement.insertBefore(successMsg, document.getElementById('test-url-list'));
+            setTimeout(() => successMsg.remove(), 3000);
+        }
+    })
+    .catch(error => {
+        console.error('Error adding URL:', error);
+        alert('Error adding URL: ' + error.message);
+    });
+}
+
+function removeTestURL(url) {
+    if (!confirm(`Remove ${url} from test list?`)) return;
+    
+    fetch('/api/test-urls', {
+        method: 'DELETE',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({url: url})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            alert('Error: ' + data.error);
+        } else {
+            loadTestURLList();
+        }
+    })
+    .catch(error => {
+        console.error('Error removing URL:', error);
+        alert('Error removing URL address');
+    });
+}
+
+function testAllURLs() {
+    const interface = document.getElementById('test-url-interface-select').value;
+    const resultsDiv = document.getElementById('url-test-results');
+    
+    resultsDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing URLs...';
+    
+    fetch('/api/test-all-urls', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({interface: interface || null})
+    })
+    .then(response => response.json())
+    .then(data => {
+        displayURLTestResults(data.results || []);
+    })
+    .catch(error => {
+        console.error('Error testing URLs:', error);
+        resultsDiv.innerHTML = '<div class="alert alert-danger">Error testing URLs</div>';
+    });
+}
+
+function testURLAllInterfaces(url) {
+    const resultsContainer = document.getElementById('url-test-results-container');
+    if (!resultsContainer) return;
+    
+    // Show loading state
+    resultsContainer.innerHTML = `
+        <div class="alert alert-info">
+            <i class="fas fa-spinner fa-spin"></i> Testing ${url} through all interfaces...
+        </div>
+    `;
+    
+    fetch('/api/test-url-all-interfaces', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({url: url})
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        displayURLTestResults(data.results || [], data.url);
+    })
+    .catch(error => {
+        console.error('Error testing URL through all interfaces:', error);
+        resultsContainer.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle"></i> 
+                Error testing ${url}: ${error.message}
+            </div>
+        `;
+    });
+}
+
+function displayURLTestResults(results, url = null) {
+    const resultsDiv = url ? document.getElementById('url-test-results-container') : document.getElementById('url-test-results');
+    if (!resultsDiv) return;
+    
+    if (results.length === 0) {
+        resultsDiv.innerHTML = '<p class="text-muted">No test results</p>';
+        return;
+    }
+    
+    // Group results by URL if testing multiple URLs
+    const groupedByURL = {};
+    results.forEach(result => {
+        const urlKey = result.url || 'Unknown';
+        if (!groupedByURL[urlKey]) {
+            groupedByURL[urlKey] = [];
+        }
+        groupedByURL[urlKey].push(result);
+    });
+    
+    let html = '';
+    
+    if (url) {
+        // Single URL test results
+        const successful = results.filter(r => r.success).length;
+        const failed = results.length - successful;
+        
+        html = `
+            <div class="card">
+                <div class="card-header bg-warning text-dark">
+                    <h6 class="mb-0">
+                        <i class="fas fa-vial me-2"></i>Test Results for <code>${url}</code>
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <span class="badge bg-success me-2">${successful} Successful</span>
+                        <span class="badge bg-danger me-2">${failed} Failed</span>
+                        <span class="badge bg-info">${results.length} Total Tests</span>
+                    </div>
+        `;
+    }
+    
+    html += '<div class="table-responsive"><table class="table table-sm table-bordered">';
+    html += '<thead class="table-dark"><tr><th>URL</th><th>Interface</th><th>Status</th><th>HTTP Code</th><th>Response Time</th><th>Error</th><th>Timestamp</th></tr></thead><tbody>';
+    
+    Object.keys(groupedByURL).forEach(urlKey => {
+        const urlResults = groupedByURL[urlKey];
+        urlResults.forEach((result, index) => {
+            const statusBadge = result.success 
+                ? '<span class="badge bg-success">Success</span>' 
+                : '<span class="badge bg-danger">Failed</span>';
+            
+            const httpCode = result.status_code ? `<span class="badge bg-info">${result.status_code}</span>` : 'N/A';
+            const responseTime = result.response_time_ms ? `${result.response_time_ms.toFixed(2)} ms` : 'N/A';
+            const error = result.error || '-';
+            const timestamp = result.timestamp ? new Date(result.timestamp).toLocaleString() : 'N/A';
+            
+            const rowClass = result.success ? '' : 'table-warning';
+            const urlCell = index === 0 ? `<td rowspan="${urlResults.length}"><code>${result.url || urlKey}</code></td>` : '';
+            
+            html += `
+                <tr class="${rowClass}">
+                    ${urlCell}
+                    <td><code>${result.interface || 'default'}</code></td>
+                    <td>${statusBadge}</td>
+                    <td>${httpCode}</td>
+                    <td>${responseTime}</td>
+                    <td><small class="text-muted">${error}</small></td>
+                    <td><small>${timestamp}</small></td>
+                </tr>
+            `;
+        });
+    });
+    
+    html += '</tbody></table></div>';
+    
+    if (url) {
+        html += '</div></div>';
+    }
+    
+    // Add summary if testing multiple URLs
+    if (!url && Object.keys(groupedByURL).length > 1) {
+        const totalTests = results.length;
+        const successfulTests = results.filter(r => r.success).length;
+        const failedTests = totalTests - successfulTests;
+        
+        html += `
+            <div class="mt-2 p-2 bg-light rounded">
+                <small>
+                    <strong>Summary:</strong> 
+                    ${totalTests} test(s) for ${Object.keys(groupedByURL).length} URL(s) through ${new Set(results.map(r => r.interface)).size} interface(s)<br>
+                    <span class="text-success"><i class="fas fa-check-circle"></i> ${successfulTests} successful</span> | 
+                    <span class="text-danger"><i class="fas fa-times-circle"></i> ${failedTests} failed</span>
+                </small>
+            </div>
+        `;
+    }
+    
+    resultsDiv.innerHTML = html;
+}
+
+function testAllIPs() {
+    const interface = document.getElementById('test-interface-select').value;
+    const resultsDiv = document.getElementById('test-results');
+    
+    resultsDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing connections...';
+    
+    fetch('/api/test-all-ips', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({interface: interface || null})
+    })
+    .then(response => response.json())
+    .then(data => {
+        displayTestResults(data.results || []);
+    })
+    .catch(error => {
+        console.error('Error testing IPs:', error);
+        resultsDiv.innerHTML = '<div class="alert alert-danger">Error testing connections</div>';
+    });
+}
+
+function displayTestResults(results) {
+    const resultsDiv = document.getElementById('test-results');
+    
+    if (results.length === 0) {
+        resultsDiv.innerHTML = '<p class="text-muted">No test results</p>';
+        return;
+    }
+    
+    let html = '<div class="table-responsive"><table class="table table-sm table-bordered">';
+    html += '<thead><tr><th>IP</th><th>Interface</th><th>Status</th><th>Latency</th><th>Error</th></tr></thead><tbody>';
+    
+    results.forEach(result => {
+        const statusBadge = result.success 
+            ? '<span class="badge bg-success">Success</span>' 
+            : '<span class="badge bg-danger">Failed</span>';
+        
+        const latency = result.latency_ms ? `${result.latency_ms.toFixed(2)} ms` : 'N/A';
+        const error = result.error || '-';
+        
+        // Highlight interface column if testing through specific interface
+        const interfaceDisplay = result.interface && result.interface !== 'default' 
+            ? `<code class="text-primary">${result.interface}</code>` 
+            : `<code>${result.interface}</code>`;
+        
+        html += `
+            <tr>
+                <td><code>${result.ip}</code></td>
+                <td>${interfaceDisplay}</td>
+                <td>${statusBadge}</td>
+                <td>${latency}</td>
+                <td><small class="text-muted">${error}</small></td>
+            </tr>
+        `;
+    });
+    
+    html += '</tbody></table></div>';
+    
+    // Add summary
+    const totalTests = results.length;
+    const successfulTests = results.filter(r => r.success).length;
+    const failedTests = totalTests - successfulTests;
+    const uniqueIPs = [...new Set(results.map(r => r.ip))].length;
+    const uniqueInterfaces = [...new Set(results.map(r => r.interface))].length;
+    
+    html += `
+        <div class="mt-2 p-2 bg-light rounded">
+            <small>
+                <strong>Summary:</strong> 
+                ${totalTests} test(s) for ${uniqueIPs} IP(s) through ${uniqueInterfaces} interface(s)<br>
+                <span class="text-success"><i class="fas fa-check-circle"></i> ${successfulTests} successful</span> | 
+                <span class="text-danger"><i class="fas fa-times-circle"></i> ${failedTests} failed</span>
+            </small>
+        </div>
+    `;
+    
+    resultsDiv.innerHTML = html;
+}
+
+function setRoute() {
+    const interface = document.getElementById('route-interface-select').value;
+    const targetIP = document.getElementById('route-target-ip').value.trim();
+    const gateway = document.getElementById('route-gateway').value.trim();
+    
+    if (!interface || !targetIP) {
+        alert('Please select an interface and enter a target IP');
+        return;
+    }
+    
+    fetch('/api/set-route', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            interface: interface,
+            target_ip: targetIP,
+            gateway: gateway || null
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            alert('Error: ' + data.error);
+        } else {
+            alert('Route configured: ' + data.message);
+            document.getElementById('route-target-ip').value = '';
+            document.getElementById('route-gateway').value = '';
+            refreshRouteStatus();
+        }
+    })
+    .catch(error => {
+        console.error('Error setting route:', error);
+        alert('Error setting route');
+    });
+}
+
+function refreshRouteStatus() {
+    fetch('/api/route-status')
+        .then(response => response.json())
+        .then(data => {
+            displayRouteStatus(data);
+        })
+        .catch(error => {
+            console.error('Error loading route status:', error);
+        });
+}
+
+function displayRouteStatus(status) {
+    const container = document.getElementById('route-status');
+    
+    const configuredRoutes = status.configured_routes || {};
+    if (Object.keys(configuredRoutes).length === 0) {
+        container.innerHTML = '<p class="text-muted">No routes configured</p>';
+        return;
+    }
+    
+    let html = '<h6>Configured Routes:</h6><div class="table-responsive"><table class="table table-sm">';
+    html += '<thead><tr><th>Interface</th><th>Target IP</th><th>Gateway</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
+    
+    Object.entries(configuredRoutes).forEach(([iface, config]) => {
+        const statusBadge = config.enabled 
+            ? '<span class="badge bg-success">Enabled</span>' 
+            : '<span class="badge bg-secondary">Disabled</span>';
+        
+        html += `
+            <tr>
+                <td><code>${iface}</code></td>
+                <td>${config.target_ip}</td>
+                <td>${config.gateway || 'Auto'}</td>
+                <td>${statusBadge}</td>
+                <td>
+                    ${config.enabled ? 
+                        `<button class="btn btn-sm btn-warning" onclick="disableRoute('${iface}')" data-requires-edit>Disable</button>` :
+                        `<button class="btn btn-sm btn-success" onclick="enableRoute('${iface}')" data-requires-edit>Enable</button>`
+                    }
+                </td>
+            </tr>
+        `;
+    });
+    
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+}
+
+function disableRoute(interface) {
+    if (!confirm(`Disable route for ${interface}?`)) return;
+    
+    fetch('/api/disable-route', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({interface: interface})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            alert('Error: ' + data.error);
+        } else {
+            refreshRouteStatus();
+            refreshRouteMonitor();
+        }
+    })
+    .catch(error => {
+        console.error('Error disabling route:', error);
+        alert('Error disabling route');
+    });
+}
+
+function enableRoute(interface) {
+    fetch('/api/enable-route', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({interface: interface})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            alert('Error: ' + data.error);
+        } else {
+            refreshRouteStatus();
+            refreshRouteMonitor();
+        }
+    })
+    .catch(error => {
+        console.error('Error enabling route:', error);
+        alert('Error enabling route');
+    });
+}
+
+function refreshRouteMonitor() {
+    fetch('/api/monitor-routes')
+        .then(response => response.json())
+        .then(data => {
+            displayRouteMonitor(data);
+        })
+        .catch(error => {
+            console.error('Error loading route monitor:', error);
+            document.getElementById('route-monitor').innerHTML = 
+                '<div class="alert alert-danger">Error loading route monitor</div>';
+        });
+}
+
+function displayRouteMonitor(data) {
+    const container = document.getElementById('route-monitor');
+    
+    const routeTests = data.route_tests || {};
+    const configuredRoutes = data.configured_routes || {};
+    const activeRoutes = data.active_routes || 0;
+    const totalRoutes = data.total_configured_routes || 0;
+    
+    let html = `
+        <div class="row mb-3">
+            <div class="col-md-3">
+                <div class="card bg-primary text-white">
+                    <div class="card-body text-center">
+                        <h4>${totalRoutes}</h4>
+                        <small>Total Routes</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-success text-white">
+                    <div class="card-body text-center">
+                        <h4>${activeRoutes}</h4>
+                        <small>Active Routes</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-info text-white">
+                    <div class="card-body text-center">
+                        <h4>${Object.keys(routeTests).length}</h4>
+                        <small>Routes Tested</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-warning text-white">
+                    <div class="card-body text-center">
+                        <button class="btn btn-sm btn-outline-light w-100" onclick="testAllRoutes()">
+                            <i class="fas fa-play"></i> Test All Routes
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    if (Object.keys(configuredRoutes).length > 0) {
+        html += '<h6>Route Connection Status:</h6><div class="table-responsive"><table class="table table-sm table-bordered">';
+        html += '<thead class="table-dark"><tr><th>Interface</th><th>Target IP</th><th>Gateway</th><th>Route Status</th><th>Connection Test</th><th>Latency</th><th>Last Test</th><th>Actions</th></tr></thead><tbody>';
+        
+        Object.entries(configuredRoutes).forEach(([iface, config]) => {
+            const routeEnabled = config.enabled !== false;
+            const routeStatusBadge = routeEnabled 
+                ? '<span class="badge bg-success">Enabled</span>' 
+                : '<span class="badge bg-secondary">Disabled</span>';
+            
+            // Get test result if available
+            const testResult = routeTests[iface];
+            let connectionBadge = '<span class="badge bg-secondary">Not Tested</span>';
+            let latency = 'N/A';
+            let timestamp = 'N/A';
+            let errorMsg = '';
+            
+            if (testResult) {
+                connectionBadge = testResult.success 
+                    ? '<span class="badge bg-success">Connected</span>' 
+                    : '<span class="badge bg-danger">Failed</span>';
+                latency = testResult.latency_ms ? `${testResult.latency_ms.toFixed(2)} ms` : 'N/A';
+                timestamp = testResult.timestamp ? new Date(testResult.timestamp).toLocaleString() : 'N/A';
+                errorMsg = testResult.error || '';
+            }
+            
+            html += `
+                <tr>
+                    <td><code>${iface}</code></td>
+                    <td><code>${config.target_ip || 'N/A'}</code></td>
+                    <td><code>${config.gateway || 'Auto'}</code></td>
+                    <td>${routeStatusBadge}</td>
+                    <td>${connectionBadge}</td>
+                    <td>${latency}</td>
+                    <td><small>${timestamp}</small></td>
+                    <td>
+                        <button class="btn btn-sm btn-primary" onclick="testRoute('${iface}')" title="Test this route">
+                            <i class="fas fa-vial"></i> Test
+                        </button>
+                    </td>
+                </tr>
+            `;
+            
+            // Add error message row if test failed
+            if (testResult && !testResult.success && errorMsg) {
+                html += `
+                    <tr class="table-warning">
+                        <td colspan="8">
+                            <small><i class="fas fa-exclamation-triangle"></i> <strong>Error:</strong> ${errorMsg}</small>
+                        </td>
+                    </tr>
+                `;
+            }
+        });
+        
+        html += '</tbody></table></div>';
+    } else {
+        html += '<div class="alert alert-info"><i class="fas fa-info-circle"></i> No routes configured. Configure routes above to see monitoring data.</div>';
+    }
+    
+    container.innerHTML = html;
+}
+
+function testRoute(interface) {
+    const container = document.getElementById('route-monitor');
+    const testButton = event.target.closest('button');
+    const originalHtml = testButton.innerHTML;
+    
+    // Show loading state
+    testButton.disabled = true;
+    testButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing...';
+    
+    fetch('/api/test-route', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({interface: interface})
+    })
+    .then(response => response.json())
+    .then(data => {
+        // Refresh the route monitor to show updated results
+        refreshRouteMonitor();
+    })
+    .catch(error => {
+        console.error('Error testing route:', error);
+        alert('Error testing route: ' + error.message);
+        testButton.disabled = false;
+        testButton.innerHTML = originalHtml;
+    });
+}
+
+function testAllRoutes() {
+    if (!confirm('Test all configured routes? This may take a moment.')) {
+        return;
+    }
+    
+    const container = document.getElementById('route-monitor');
+    container.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing all routes...';
+    
+    // Refresh route monitor which will test all routes
+    refreshRouteMonitor();
+}
+
+// Auto-refresh route monitor every 10 seconds
+setInterval(refreshRouteMonitor, 10000);
+
+function refreshSystemRoutes() {
+    const container = document.getElementById('system-routes');
+    container.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading system routes...';
+    
+    fetch('/api/all-system-routes')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            displaySystemRoutes(data);
+        })
+        .catch(error => {
+            console.error('Error loading system routes:', error);
+            container.innerHTML = 
+                '<div class="alert alert-danger">' +
+                '<i class="fas fa-exclamation-triangle"></i> ' +
+                'Error loading system routes: ' + (error.message || 'Unknown error') +
+                '<br><small>Please check the server logs for more details.</small>' +
+                '</div>';
+        });
+}
+
+function displaySystemRoutes(data) {
+    const container = document.getElementById('system-routes');
+    
+    if (data.error) {
+        container.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle"></i> 
+                <strong>Error:</strong> ${data.error}
+                <br><small>This might be due to insufficient permissions or unsupported system.</small>
+            </div>
+        `;
+        return;
+    }
+    
+    const routes = data.routes || [];
+    const totalRoutes = data.total_routes || 0;
+    const system = data.system || 'Unknown';
+    
+    if (routes.length === 0) {
+        container.innerHTML = `
+            <div class="alert alert-warning">
+                <i class="fas fa-info-circle"></i> 
+                No routes found or unable to parse routes.
+                <br><small>This might be normal if the system has no active routes or the route format is not recognized.</small>
+            </div>
+        `;
+        return;
+    }
+    
+    let html = `
+        <div class="mb-3">
+            <strong>System:</strong> ${system} | 
+            <strong>Total Routes:</strong> ${totalRoutes}
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm table-striped table-bordered">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Destination</th>
+                        <th>Gateway</th>
+                        <th>Interface</th>
+                        <th>Flags</th>
+                        <th>Flag Explanations</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    routes.forEach((route, index) => {
+        const destination = route.destination || 'Unknown';
+        const gateway = route.gateway || 'default';
+        const interface_name = route.interface || 'N/A';
+        const flags = route.flags || '';
+        const flagExplanations = route.flag_explanations || {};
+        const explanations = flagExplanations.explanations || [];
+        
+        // Color code flags
+        let flagBadges = '';
+        if (flags) {
+            flags.split('').forEach(flag => {
+                let badgeClass = 'bg-secondary';
+                if (flag === 'U') badgeClass = 'bg-success';
+                else if (flag === 'G') badgeClass = 'bg-primary';
+                else if (flag === 'H') badgeClass = 'bg-info';
+                else if (flag === 'S') badgeClass = 'bg-warning';
+                else if (flag === 'D') badgeClass = 'bg-danger';
+                
+                flagBadges += `<span class="badge ${badgeClass} me-1" title="${explanations.find(e => e.startsWith(flag + ':')) || flag}">${flag}</span>`;
+            });
+        } else {
+            flagBadges = '<span class="text-muted">N/A</span>';
+        }
+        
+        // Create tooltip for flag explanations
+        const explanationText = explanations.length > 0 
+            ? explanations.join('<br>') 
+            : 'No flag explanations available';
+        
+        html += `
+            <tr>
+                <td><code>${destination}</code></td>
+                <td><code>${gateway}</code></td>
+                <td><code>${interface_name}</code></td>
+                <td>${flagBadges}</td>
+                <td>
+                    <small class="text-muted" data-bs-toggle="tooltip" 
+                           data-bs-html="true" 
+                           data-bs-placement="top" 
+                           title="${explanationText.replace(/"/g, '&quot;')}">
+                        <i class="fas fa-info-circle text-primary"></i> 
+                        ${explanations.length > 0 ? explanations[0].split(':')[1]?.trim() || 'Hover for details' : 'No flags'}
+                    </small>
+                </td>
+            </tr>
+        `;
+    });
+    
+    html += `
+                </tbody>
+            </table>
+        </div>
+        <div class="mt-3">
+            <h6>Flag Legend:</h6>
+            <div class="row">
+                <div class="col-md-6">
+                    <ul class="list-unstyled">
+                        <li><span class="badge bg-success">U</span> Up - Route is active</li>
+                        <li><span class="badge bg-primary">G</span> Gateway - Uses a router</li>
+                        <li><span class="badge bg-info">H</span> Host - Route to specific host</li>
+                        <li><span class="badge bg-warning">S</span> Static - Manually added</li>
+                        <li><span class="badge bg-danger">D</span> Dynamic - Created dynamically</li>
+                    </ul>
+                </div>
+                <div class="col-md-6">
+                    <ul class="list-unstyled">
+                        <li><span class="badge bg-secondary">R</span> Reinstate - Reinstated after interface up</li>
+                        <li><span class="badge bg-secondary">M</span> Modified - Modified by daemon</li>
+                        <li><span class="badge bg-secondary">A</span> Address - Installed by addrconf</li>
+                        <li><span class="badge bg-secondary">C</span> Cache - From cache</li>
+                        <li><span class="badge bg-secondary">L</span> Link - Involves a link</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    container.innerHTML = html;
+    
+    // Initialize Bootstrap tooltips
+    const tooltipTriggerList = [].slice.call(container.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+}
+
+
+function saveConfigs() {
+    fetch('/api/save-configs', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Configurations saved successfully to YAML files:\n- test_ips.yaml\n- routes.yaml');
+        } else {
+            alert('Error saving configurations: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Error saving configurations:', error);
+        alert('Error saving configurations: ' + error.message);
+    });
+}
+
+function reloadConfigs() {
+    if (!confirm('Reload configurations from YAML files? This will overwrite current settings.')) {
+        return;
+    }
+    
+    fetch('/api/reload-configs', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Configurations reloaded successfully from YAML files');
+            // Reload the UI
+            loadTestIPList();
+            refreshRouteStatus();
+            refreshRouteMonitor();
+        } else {
+            alert('Error reloading configurations: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Error reloading configurations:', error);
+        alert('Error reloading configurations: ' + error.message);
+    });
+}
+</script>
+{% endblock %}
+

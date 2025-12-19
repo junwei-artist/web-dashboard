@@ -1,6 +1,6 @@
 @echo off
 REM System Monitor Web Dashboard - Installation Script for Windows
-REM This script checks for Python 3.13, installs it if needed, creates venv, and sets up the project
+REM This script checks for Python 3.10, installs it if needed, creates venv, and sets up the project
 
 echo ==================================================
 echo 🚀 System Monitor Web Dashboard - Installation
@@ -12,22 +12,22 @@ cd /d "%SCRIPT_DIR%"
 
 echo [INFO] Working directory: %SCRIPT_DIR%
 
-REM Check if Python 3.13 is installed
-echo [INFO] Checking for Python 3.13...
-python --version 2>nul | findstr "3.13" >nul
+REM Check if Python 3.10 is installed
+echo [INFO] Checking for Python 3.10...
+python --version 2>nul | findstr "3.10" >nul
 if %errorlevel% equ 0 (
-    echo [INFO] ✅ Found Python 3.13
+    echo [INFO] ✅ Found Python 3.10
     goto :create_venv
 )
 
-python3 --version 2>nul | findstr "3.13" >nul
+python3 --version 2>nul | findstr "3.10" >nul
 if %errorlevel% equ 0 (
-    echo [INFO] ✅ Found Python 3.13
+    echo [INFO] ✅ Found Python 3.10
     goto :create_venv
 )
 
-echo [INFO] ❌ Python 3.13 not found
-echo [ERROR] Please install Python 3.13 manually from https://www.python.org/downloads/
+echo [INFO] ❌ Python 3.10 not found
+echo [ERROR] Please install Python 3.10 manually from https://www.python.org/downloads/
 echo [ERROR] Make sure to check "Add Python to PATH" during installation
 echo [ERROR] Then run this script again.
 pause
@@ -125,7 +125,7 @@ echo    └── start_dashboard.bat
 echo.
 echo 🔧 Troubleshooting:
 echo    - If you encounter issues, check the logs above
-echo    - Make sure Python 3.13 is installed and in PATH
+echo    - Make sure Python 3.10 is installed and in PATH
 echo    - Run this script again if installation fails
 echo.
 

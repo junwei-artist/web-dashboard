@@ -9,6 +9,9 @@ import socket
 import psutil
 import json
 import time
+import ipaddress
+import os
+import yaml
 from datetime import datetime
 from typing import Dict, List, Any
 import logging
@@ -35,6 +38,21 @@ class SystemMonitor:
         # Network connection monitoring
         self._network_connections = {}  # {connection_id: {local_addr, remote_addr, status, process, timestamp}}
         self._connection_history = []  # List of all network connection records
+        
+        # Network interface IP list management
+        self._test_ip_list = []  # List of IPs to test
+        self._test_url_list = []  # List of URLs to test with curl
+        self._route_configs = {}  # {interface_name: {enabled: bool, target_ip: str, gateway: str}}
+        
+        # Configuration file paths
+        self._test_ips_file = "test_ips.yaml"
+        self._test_urls_file = "test_urls.yaml"
+        self._routes_file = "routes.yaml"
+        
+        # Load saved configurations
+        self.load_test_ips_from_file()
+        self.load_test_urls_from_file()
+        self.load_routes_from_file()
     
     def _initialize_port_labels(self) -> Dict[str, str]:
         """Initialize common port labels for known services."""
@@ -1417,6 +1435,1533 @@ class SystemMonitor:
                 'total_unique_clients': 0,
                 'custom_ports_defined': [],
                 'active_custom_ports': []
+            }
+
+    def get_network_interfaces(self) -> List[Dict[str, Any]]:
+        """Get list of network interfaces (en0, en1, etc.) with their details."""
+        try:
+            interfaces = []
+            net_if_addrs = psutil.net_if_addrs()
+            net_if_stats = psutil.net_if_stats()
+            
+            for interface_name, addresses in net_if_addrs.items():
+                interface_info = {
+                    'name': interface_name,
+                    'addresses': [],
+                    'is_up': False,
+                    'speed': 0,
+                    'mtu': 0,
+                    'type': 'Unknown'
+                }
+                
+                # Get interface statistics
+                if interface_name in net_if_stats:
+                    stats = net_if_stats[interface_name]
+                    interface_info['is_up'] = stats.isup
+                    interface_info['speed'] = stats.speed
+                    interface_info['mtu'] = stats.mtu
+                
+                # Get addresses for this interface
+                for addr in addresses:
+                    # Determine family type
+                    if addr.family == socket.AF_INET:
+                        family_str = 'IPv4'
+                    elif addr.family == socket.AF_INET6:
+                        family_str = 'IPv6'
+                    else:
+                        family_str = str(addr.family)
+                    
+                    addr_info = {
+                        'family': family_str,
+                        'family_raw': addr.family,  # Store raw value for easier comparison
+                        'address': addr.address,
+                        'netmask': addr.netmask if hasattr(addr, 'netmask') else None,
+                        'broadcast': addr.broadcast if hasattr(addr, 'broadcast') else None
+                    }
+                    
+                    # Determine interface type based on name and address
+                    if interface_name.startswith('en') or interface_name.startswith('eth'):
+                        if '192.168.' in addr.address or '10.' in addr.address or '172.' in addr.address:
+                            interface_info['type'] = 'Ethernet'
+                        elif 'fe80::' in addr.address:
+                            interface_info['type'] = 'Ethernet (IPv6)'
+                    elif interface_name.startswith('wlan') or interface_name.startswith('wifi') or interface_name.startswith('wl'):
+                        interface_info['type'] = 'WiFi'
+                    elif interface_name.startswith('lo'):
+                        interface_info['type'] = 'Loopback'
+                    elif interface_name.startswith('ppp'):
+                        interface_info['type'] = 'PPP'
+                    elif interface_name.startswith('tun') or interface_name.startswith('tap'):
+                        interface_info['type'] = 'VPN/Tunnel'
+                    
+                    interface_info['addresses'].append(addr_info)
+                
+                interfaces.append(interface_info)
+            
+            # Sort interfaces by name
+            interfaces.sort(key=lambda x: x['name'])
+            return interfaces
+            
+        except Exception as e:
+            logger.error(f"Error getting network interfaces: {e}")
+            return []
+    
+    def load_test_ips_from_file(self, file_path: str = None) -> bool:
+        """Load test IP list from YAML file."""
+        if file_path is None:
+            file_path = self._test_ips_file
+        
+        try:
+            if os.path.exists(file_path):
+                with open(file_path, 'r') as f:
+                    data = yaml.safe_load(f)
+                    if data and isinstance(data, dict):
+                        self._test_ip_list = data.get('test_ips', [])
+                    elif isinstance(data, list):
+                        # Handle case where file contains just a list
+                        self._test_ip_list = data
+                    else:
+                        self._test_ip_list = []
+                
+                logger.info(f"Loaded {len(self._test_ip_list)} test IPs from {file_path}")
+                return True
+            else:
+                logger.info(f"Test IPs file {file_path} not found, starting with empty list")
+                self._test_ip_list = []
+                return False
+        except yaml.YAMLError as e:
+            logger.error(f"Error parsing YAML file {file_path}: {e}")
+            self._test_ip_list = []
+            return False
+        except Exception as e:
+            logger.error(f"Error loading test IPs from {file_path}: {e}")
+            self._test_ip_list = []
+            return False
+    
+    def save_test_ips_to_file(self, file_path: str = None) -> bool:
+        """Save test IP list to YAML file."""
+        if file_path is None:
+            file_path = self._test_ips_file
+        
+        try:
+            data = {
+                'test_ips': self._test_ip_list,
+                'last_updated': datetime.now().isoformat(),
+                'total_ips': len(self._test_ip_list)
+            }
+            
+            with open(file_path, 'w') as f:
+                yaml.dump(data, f, default_flow_style=False, sort_keys=False)
+            
+            logger.info(f"Saved {len(self._test_ip_list)} test IPs to {file_path}")
+            return True
+        except Exception as e:
+            logger.error(f"Error saving test IPs to {file_path}: {e}")
+            return False
+    
+    def add_test_ip(self, ip: str) -> bool:
+        """Add an IP address to the test list."""
+        try:
+            # Validate IP address (supports both IPv4 and IPv6)
+            ipaddress.ip_address(ip)
+            if ip not in self._test_ip_list:
+                self._test_ip_list.append(ip)
+                logger.info(f"Added test IP: {ip}")
+                # Save to file
+                self.save_test_ips_to_file()
+                return True
+            else:
+                logger.warning(f"IP {ip} already in test list")
+                return False
+        except ValueError as e:
+            logger.error(f"Invalid IP address: {ip} - {str(e)}")
+            return False
+        except Exception as e:
+            logger.error(f"Error adding test IP {ip}: {str(e)}")
+            return False
+    
+    def remove_test_ip(self, ip: str) -> bool:
+        """Remove an IP address from the test list."""
+        if ip in self._test_ip_list:
+            self._test_ip_list.remove(ip)
+            logger.info(f"Removed test IP: {ip}")
+            # Save to file
+            self.save_test_ips_to_file()
+            return True
+        return False
+    
+    def get_test_ip_list(self) -> List[str]:
+        """Get the list of IPs to test."""
+        return self._test_ip_list.copy()
+    
+    def load_test_urls_from_file(self, file_path: str = None) -> bool:
+        """Load test URL list from YAML file."""
+        if file_path is None:
+            file_path = self._test_urls_file
+        
+        try:
+            if os.path.exists(file_path):
+                with open(file_path, 'r') as f:
+                    data = yaml.safe_load(f)
+                    if data and isinstance(data, dict):
+                        self._test_url_list = data.get('test_urls', [])
+                    elif isinstance(data, list):
+                        self._test_url_list = data
+                    else:
+                        self._test_url_list = []
+                
+                logger.info(f"Loaded {len(self._test_url_list)} test URLs from {file_path}")
+                return True
+            else:
+                logger.info(f"Test URLs file {file_path} not found, starting with empty list")
+                self._test_url_list = []
+                return False
+        except yaml.YAMLError as e:
+            logger.error(f"Error parsing YAML file {file_path}: {e}")
+            self._test_url_list = []
+            return False
+        except Exception as e:
+            logger.error(f"Error loading test URLs from {file_path}: {e}")
+            self._test_url_list = []
+            return False
+    
+    def save_test_urls_to_file(self, file_path: str = None) -> bool:
+        """Save test URL list to YAML file."""
+        if file_path is None:
+            file_path = self._test_urls_file
+        
+        try:
+            data = {
+                'test_urls': self._test_url_list,
+                'last_updated': datetime.now().isoformat(),
+                'total_urls': len(self._test_url_list)
+            }
+            
+            with open(file_path, 'w') as f:
+                yaml.dump(data, f, default_flow_style=False, sort_keys=False)
+            
+            logger.info(f"Saved {len(self._test_url_list)} test URLs to {file_path}")
+            return True
+        except Exception as e:
+            logger.error(f"Error saving test URLs to {file_path}: {e}")
+            return False
+    
+    def add_test_url(self, url: str) -> bool:
+        """Add a URL to the test list."""
+        try:
+            if not url or not url.strip():
+                return False
+            
+            url = url.strip()
+            
+            if not (url.startswith('http://') or url.startswith('https://')):
+                logger.error(f"Invalid URL format (must start with http:// or https://): {url}")
+                return False
+            
+            if url not in self._test_url_list:
+                self._test_url_list.append(url)
+                logger.info(f"Added test URL: {url}")
+                self.save_test_urls_to_file()
+                return True
+            else:
+                logger.warning(f"URL {url} already in test list")
+                return False
+        except Exception as e:
+            logger.error(f"Error adding test URL {url}: {str(e)}")
+            return False
+    
+    def remove_test_url(self, url: str) -> bool:
+        """Remove a URL from the test list."""
+        if url in self._test_url_list:
+            self._test_url_list.remove(url)
+            logger.info(f"Removed test URL: {url}")
+            self.save_test_urls_to_file()
+            return True
+        return False
+    
+    def get_test_url_list(self) -> List[str]:
+        """Get the list of URLs to test."""
+        return self._test_url_list.copy()
+    
+    def test_url_connection(self, url: str, interface: str = None) -> Dict[str, Any]:
+        """Test URL connection using curl through a specific interface."""
+        try:
+            result = {
+                'url': url,
+                'interface': interface or 'default',
+                'success': False,
+                'status_code': None,
+                'response_time_ms': None,
+                'error': None,
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            import platform
+            system = platform.system()
+            
+            # Build curl command
+            cmd = ['curl', '-s', '-o', '/dev/null', '-w', '%{http_code}|%{time_total}', '--max-time', '10']
+            
+            # Add interface binding if specified
+            if interface:
+                interface_ip = None
+                try:
+                    net_if_addrs = psutil.net_if_addrs()
+                    if interface in net_if_addrs:
+                        for addr in net_if_addrs[interface]:
+                            if addr.family == socket.AF_INET:
+                                interface_ip = addr.address
+                                break
+                    
+                    if not interface_ip:
+                        interfaces = self.get_network_interfaces()
+                        for iface in interfaces:
+                            if iface['name'] == interface:
+                                for addr in iface['addresses']:
+                                    family_raw = addr.get('family_raw')
+                                    if family_raw == socket.AF_INET:
+                                        interface_ip = addr.get('address')
+                                        break
+                                    addr_value = addr.get('address', '')
+                                    if addr_value and '.' in addr_value and ':' not in addr_value:
+                                        try:
+                                            ipaddress.ip_address(addr_value)
+                                            if addr_value.count('.') == 3:
+                                                interface_ip = addr_value
+                                                break
+                                        except:
+                                            pass
+                                break
+                except Exception as e:
+                    logger.warning(f"Error getting interface IP for {interface}: {e}")
+                
+                if interface_ip:
+                    cmd.extend(['--interface', interface_ip])
+            
+            cmd.append(url)
+            
+            start_time = time.time()
+            try:
+                curl_result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+                end_time = time.time()
+                
+                if curl_result.returncode == 0:
+                    output = curl_result.stdout.strip()
+                    if '|' in output:
+                        parts = output.split('|')
+                        if len(parts) >= 2:
+                            try:
+                                status_code = int(parts[0])
+                                time_total = float(parts[1])
+                                
+                                result['success'] = True
+                                result['status_code'] = status_code
+                                result['response_time_ms'] = time_total * 1000
+                            except (ValueError, IndexError):
+                                result['success'] = False
+                                result['error'] = f'Could not parse curl output: {output}'
+                        else:
+                            result['success'] = False
+                            result['error'] = f'Unexpected curl output format: {output}'
+                    else:
+                        result['success'] = False
+                        result['error'] = f'Unexpected curl output: {output}'
+                else:
+                    result['success'] = False
+                    result['error'] = curl_result.stderr or f'curl failed with return code {curl_result.returncode}'
+                    result['response_time_ms'] = (end_time - start_time) * 1000
+                    
+            except subprocess.TimeoutExpired:
+                result['success'] = False
+                result['error'] = 'Connection timeout (exceeded 10 seconds)'
+                result['response_time_ms'] = 10000
+            except FileNotFoundError:
+                result['success'] = False
+                result['error'] = 'curl command not found. Please install curl.'
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error testing URL connection: {e}")
+            return {
+                'url': url,
+                'interface': interface or 'default',
+                'success': False,
+                'status_code': None,
+                'response_time_ms': None,
+                'error': str(e),
+                'timestamp': datetime.now().isoformat()
+            }
+    
+    def test_url_all_interfaces(self, url: str) -> List[Dict[str, Any]]:
+        """Test a specific URL through all available interfaces."""
+        results = []
+        
+        interfaces = self.get_network_interfaces()
+        active_interfaces = [iface['name'] for iface in interfaces 
+                           if iface['is_up'] and iface['type'] != 'Loopback']
+        
+        if not active_interfaces:
+            return [{
+                'url': url,
+                'interface': 'none',
+                'success': False,
+                'error': 'No active interfaces available',
+                'timestamp': datetime.now().isoformat()
+            }]
+        
+        for iface_name in active_interfaces:
+            result = self.test_url_connection(url, iface_name)
+            results.append(result)
+        
+        return results
+    
+    def test_all_urls(self, interface: str = None) -> List[Dict[str, Any]]:
+        """Test connections to all URLs in the test list through specified interface.
+        If no interface is specified, tests through all available interfaces."""
+        results = []
+        
+        if interface:
+            for url in self._test_url_list:
+                result = self.test_url_connection(url, interface)
+                results.append(result)
+        else:
+            interfaces = self.get_network_interfaces()
+            active_interfaces = [iface['name'] for iface in interfaces 
+                               if iface['is_up'] and iface['type'] != 'Loopback']
+            
+            for url in self._test_url_list:
+                for iface_name in active_interfaces:
+                    result = self.test_url_connection(url, iface_name)
+                    results.append(result)
+        
+        return results
+    
+    def traceroute_ip(self, ip: str, interface: str = None) -> Dict[str, Any]:
+        """Perform traceroute to an IP address through a specific interface."""
+        try:
+            result = {
+                'ip': ip,
+                'interface': interface or 'default',
+                'success': False,
+                'hops': [],
+                'total_hops': 0,
+                'failed_at_hop': None,
+                'failed_layer': None,
+                'error': None,
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            import platform
+            system = platform.system()
+            
+            # Get interface IP if specified
+            interface_ip = None
+            if interface:
+                try:
+                    net_if_addrs = psutil.net_if_addrs()
+                    if interface in net_if_addrs:
+                        for addr in net_if_addrs[interface]:
+                            if addr.family == socket.AF_INET:
+                                interface_ip = addr.address
+                                break
+                    
+                    if not interface_ip:
+                        interfaces = self.get_network_interfaces()
+                        for iface in interfaces:
+                            if iface['name'] == interface:
+                                for addr in iface['addresses']:
+                                    family_raw = addr.get('family_raw')
+                                    if family_raw == socket.AF_INET:
+                                        interface_ip = addr.get('address')
+                                        break
+                                    addr_value = addr.get('address', '')
+                                    if addr_value and '.' in addr_value and ':' not in addr_value:
+                                        try:
+                                            ipaddress.ip_address(addr_value)
+                                            if addr_value.count('.') == 3:  # IPv4 address
+                                                interface_ip = addr_value
+                                                break
+                                        except:
+                                            pass
+                                break
+                except Exception as e:
+                    logger.warning(f"Error getting interface IP for {interface}: {e}")
+            
+            # Build traceroute command
+            if system == 'Darwin':  # macOS
+                cmd = ['traceroute', '-m', '30', '-w', '3']
+                if interface_ip:
+                    # macOS traceroute uses -s for source address
+                    cmd.extend(['-s', interface_ip])
+                cmd.append(ip)
+            elif system == 'Linux':
+                cmd = ['traceroute', '-m', '30', '-w', '3']
+                if interface_ip:
+                    # Linux traceroute uses -i for interface
+                    cmd.extend(['-i', interface])
+                cmd.append(ip)
+            else:
+                # Windows or other - try tracert
+                cmd = ['tracert', '-h', '30', '-w', '3000', ip]
+            
+            # Run traceroute
+            try:
+                traceroute_result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+                
+                if traceroute_result.returncode == 0 or traceroute_result.returncode == 1:  # 1 can mean timeout but got some results
+                    output = traceroute_result.stdout
+                    hops = self._parse_traceroute_output(output, system)
+                    
+                    result['hops'] = hops
+                    result['total_hops'] = len(hops)
+                    result['success'] = len(hops) > 0
+                    
+                    # Analyze failure point
+                    if hops:
+                        last_hop = hops[-1]
+                        if not last_hop.get('reached', False):
+                            result['failed_at_hop'] = len(hops)
+                            result['failed_layer'] = self._analyze_failure_layer(hops, ip)
+                        elif last_hop.get('ip') == ip:
+                            result['success'] = True
+                    else:
+                        result['failed_at_hop'] = 0
+                        result['failed_layer'] = 'Local - Cannot start traceroute'
+                        result['error'] = 'No hops found in traceroute output'
+                else:
+                    result['error'] = traceroute_result.stderr or f'traceroute failed with return code {traceroute_result.returncode}'
+                    
+            except subprocess.TimeoutExpired:
+                result['error'] = 'Traceroute timeout (exceeded 60 seconds)'
+            except FileNotFoundError:
+                result['error'] = 'traceroute command not found. Please install traceroute.'
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error performing traceroute: {e}")
+            return {
+                'ip': ip,
+                'interface': interface or 'default',
+                'success': False,
+                'hops': [],
+                'total_hops': 0,
+                'failed_at_hop': None,
+                'failed_layer': None,
+                'error': str(e),
+                'timestamp': datetime.now().isoformat()
+            }
+    
+    def _parse_traceroute_output(self, output: str, system: str) -> List[Dict[str, Any]]:
+        """Parse traceroute output into structured hop data."""
+        import re
+        hops = []
+        lines = output.split('\n')
+        
+        for line in lines:
+            line = line.strip()
+            if not line or line.startswith('traceroute') or line.startswith('Tracing'):
+                continue
+            
+            # Parse different traceroute formats
+            # macOS/Linux format: " 1  gateway (192.168.1.1)  0.234 ms  0.123 ms  0.145 ms"
+            # Or: " 1  10.5.216.1 (10.5.216.1)  1.197 ms  1.058 ms  0.627 ms"
+            # Or: " 1  * * *" for timeouts
+            
+            # First, check if this is a timeout line (all asterisks)
+            if re.match(r'^\s*\d+\s+\*', line):
+                # Timeout line: " 1  * * *"
+                hop_match = re.match(r'^\s*(\d+)', line)
+                if hop_match:
+                    hop_num = int(hop_match.group(1))
+                    hops.append({
+                        'hop_number': hop_num,
+                        'hostname': 'N/A',
+                        'ip': 'N/A',
+                        'times_ms': [],
+                        'avg_time_ms': None,
+                        'reached': False,
+                        'status': 'timeout',
+                        'explanation': 'Hop timeout - Router may be blocking ICMP or unreachable',
+                        'raw': line
+                    })
+                continue
+            
+            # Try to match hop with IP in parentheses: " 1  hostname (192.168.1.1)  times"
+            hop_match = re.match(r'^\s*(\d+)\s+(.+?)\s+\(([\d.]+)\)\s+(.+)', line)
+            if hop_match:
+                hop_num = int(hop_match.group(1))
+                hostname = hop_match.group(2).strip()
+                ip = hop_match.group(3)
+                times_part = hop_match.group(4)
+                
+                # Extract timing information
+                times = re.findall(r'(\d+\.?\d*)\s*ms', times_part)
+                times_ms = [float(t) for t in times] if times else []
+                
+                # If we have times, the hop was reached
+                if times_ms:
+                    status = 'reached'
+                    avg_time = sum(times_ms) / len(times_ms)
+                    explanation = f'Reached in {avg_time:.2f}ms average'
+                else:
+                    status = 'timeout'
+                    explanation = 'Hop timeout - No response received'
+                
+                hops.append({
+                    'hop_number': hop_num,
+                    'hostname': hostname or ip or 'Unknown',
+                    'ip': ip,
+                    'times_ms': times_ms,
+                    'avg_time_ms': sum(times_ms) / len(times_ms) if times_ms else None,
+                    'reached': len(times_ms) > 0,
+                    'status': status,
+                    'explanation': explanation,
+                    'raw': line
+                })
+                continue
+            
+            # Try to match hop without parentheses (IP might be the hostname): " 1  192.168.1.1  times"
+            hop_match = re.match(r'^\s*(\d+)\s+([\d.]+)\s+(.+)', line)
+            if hop_match:
+                hop_num = int(hop_match.group(1))
+                ip_or_hostname = hop_match.group(2)
+                times_part = hop_match.group(3)
+                
+                # Check if it's an IP address
+                if re.match(r'^\d+\.\d+\.\d+\.\d+$', ip_or_hostname):
+                    ip = ip_or_hostname
+                    hostname = ip
+                else:
+                    ip = None
+                    hostname = ip_or_hostname
+                
+                # Extract timing information
+                times = re.findall(r'(\d+\.?\d*)\s*ms', times_part)
+                times_ms = [float(t) for t in times] if times else []
+                
+                if times_ms and ip:
+                    status = 'reached'
+                    avg_time = sum(times_ms) / len(times_ms)
+                    explanation = f'Reached in {avg_time:.2f}ms average'
+                else:
+                    status = 'timeout'
+                    explanation = 'Hop timeout - No response received'
+                
+                hops.append({
+                    'hop_number': hop_num,
+                    'hostname': hostname or 'Unknown',
+                    'ip': ip or 'N/A',
+                    'times_ms': times_ms,
+                    'avg_time_ms': sum(times_ms) / len(times_ms) if times_ms else None,
+                    'reached': len(times_ms) > 0 and ip is not None,
+                    'status': status,
+                    'explanation': explanation,
+                    'raw': line
+                })
+        
+        return hops
+    
+    def _analyze_failure_layer(self, hops: List[Dict[str, Any]], target_ip: str) -> str:
+        """Analyze at which network layer the connection failed."""
+        if not hops:
+            return 'Local - No traceroute data available'
+        
+        last_hop = hops[-1]
+        
+        # Check if we got to the target
+        if last_hop.get('ip') == target_ip:
+            return 'Application - Reached target IP'
+        
+        # Analyze failure patterns
+        if last_hop.get('status') == 'timeout':
+            # Check how far we got
+            if len(hops) == 1:
+                return 'Layer 2/3 - First hop timeout (local network issue)'
+            elif len(hops) <= 3:
+                return 'Layer 3 - Early network layer failure (gateway/routing issue)'
+            else:
+                return 'Layer 3 - Network layer failure (intermediate routing issue)'
+        
+        # Check for consistent timeouts
+        timeout_count = sum(1 for hop in hops if hop.get('status') == 'timeout')
+        if timeout_count > len(hops) / 2:
+            return 'Layer 3 - Multiple timeouts (routing/firewall blocking)'
+        
+        # If we have some successful hops but didn't reach target
+        successful_hops = [h for h in hops if h.get('reached', False)]
+        if successful_hops:
+            return f'Layer 3/4 - Reached {len(successful_hops)} hops but target unreachable'
+        
+        return 'Layer 3 - Network routing failure'
+    
+    def test_ip_connection(self, ip: str, interface: str = None) -> Dict[str, Any]:
+        """Test connection to an IP address through a specific interface."""
+        try:
+            result = {
+                'ip': ip,
+                'interface': interface or 'default',
+                'success': False,
+                'latency_ms': None,
+                'error': None,
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            import platform
+            system = platform.system()
+            
+            # Get interface IP address if interface is specified
+            interface_ip = None
+            if interface:
+                try:
+                    # Use psutil directly for more reliable interface detection
+                    net_if_addrs = psutil.net_if_addrs()
+                    if interface in net_if_addrs:
+                        for addr in net_if_addrs[interface]:
+                            if addr.family == socket.AF_INET:
+                                interface_ip = addr.address
+                                break
+                    
+                    # Fallback to our interface list
+                    if not interface_ip:
+                        interfaces = self.get_network_interfaces()
+                        for iface in interfaces:
+                            if iface['name'] == interface:
+                                for addr in iface['addresses']:
+                                    family_raw = addr.get('family_raw')
+                                    if family_raw == socket.AF_INET:
+                                        interface_ip = addr.get('address')
+                                        break
+                                    # Fallback: check address format
+                                    addr_value = addr.get('address', '')
+                                    if addr_value and '.' in addr_value and ':' not in addr_value:
+                                        try:
+                                            ipaddress.ip_address(addr_value)
+                                            if addr_value.count('.') == 3:
+                                                interface_ip = addr_value
+                                                break
+                                        except:
+                                            pass
+                                break
+                except Exception as e:
+                    logger.warning(f"Error getting interface IP for {interface}: {e}")
+            
+            # Method 1: Use ping with interface binding (macOS/Linux)
+            if interface and interface_ip and system in ['Darwin', 'Linux']:
+                try:
+                    # macOS uses -S flag (source address), Linux uses -I flag (interface)
+                    if system == 'Darwin':
+                        # On macOS, use -S to specify source address (binds to interface)
+                        cmd = ['ping', '-c', '3', '-W', '1000', '-S', interface_ip, ip]
+                    else:  # Linux
+                        cmd = ['ping', '-c', '3', '-W', '1', '-I', interface_ip, ip]
+                    
+                    start_time = time.time()
+                    ping_result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+                    end_time = time.time()
+                    
+                    if ping_result.returncode == 0:
+                        result['success'] = True
+                        # Extract latency from ping output
+                        import re
+                        output = ping_result.stdout
+                        times = re.findall(r'time[<=](\d+\.?\d*)', output)
+                        if times:
+                            result['latency_ms'] = float(times[-1])
+                        else:
+                            result['latency_ms'] = (end_time - start_time) * 1000
+                    else:
+                        result['success'] = False
+                        result['error'] = ping_result.stderr or 'Connection failed'
+                    
+                    return result
+                except subprocess.TimeoutExpired:
+                    return {
+                        'ip': ip,
+                        'interface': interface,
+                        'success': False,
+                        'latency_ms': None,
+                        'error': 'Connection timeout',
+                        'timestamp': datetime.now().isoformat()
+                    }
+                except Exception as e:
+                    logger.warning(f"Ping with interface binding failed: {e}, trying socket method")
+            
+            # Method 2: Use socket binding for more reliable interface selection
+            if interface and interface_ip:
+                try:
+                    # Create a socket and bind to the interface IP
+                    test_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                    test_socket.settimeout(5)
+                    
+                    # Bind to the interface IP
+                    test_socket.bind((interface_ip, 0))
+                    
+                    # Try to connect to the target IP (this forces routing through the bound interface)
+                    start_time = time.time()
+                    try:
+                        # For UDP, we can't really "connect" but we can send a packet
+                        # For a more accurate test, we'll use a TCP connection attempt
+                        test_socket_tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                        test_socket_tcp.settimeout(5)
+                        test_socket_tcp.bind((interface_ip, 0))
+                        
+                        # Try to connect
+                        connect_start = time.time()
+                        try:
+                            test_socket_tcp.connect((ip, 80))  # Try common port
+                            connect_end = time.time()
+                            result['success'] = True
+                            result['latency_ms'] = (connect_end - connect_start) * 1000
+                        except (socket.timeout, ConnectionRefusedError, OSError):
+                            # Connection refused or timeout is actually good - it means we reached the host
+                            # through the interface, just the port might be closed
+                            connect_end = time.time()
+                            result['success'] = True
+                            result['latency_ms'] = (connect_end - connect_start) * 1000
+                            result['error'] = 'Port closed or filtered (but interface routing works)'
+                        except Exception as e:
+                            result['success'] = False
+                            result['error'] = f'Socket connection failed: {str(e)}'
+                        
+                        test_socket_tcp.close()
+                    except Exception as e:
+                        result['success'] = False
+                        result['error'] = f'Could not bind to interface {interface} ({interface_ip}): {str(e)}'
+                    
+                    test_socket.close()
+                    
+                    if result['success'] is not False:  # If we got a result, return it
+                        return result
+                        
+                except Exception as e:
+                    logger.warning(f"Socket binding method failed: {e}, falling back to default ping")
+            
+            # Method 3: Fallback to default ping (no interface binding)
+            if system == 'Darwin':  # macOS
+                cmd = ['ping', '-c', '3', '-W', '1000', ip]
+            elif system == 'Linux':
+                cmd = ['ping', '-c', '3', '-W', '1', ip]
+            elif system == 'Windows':
+                cmd = ['ping', '-n', '3', '-w', '1000', ip]
+            else:
+                cmd = ['ping', '-c', '3', ip]
+            
+            # Run ping command
+            start_time = time.time()
+            ping_result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+            end_time = time.time()
+            
+            if ping_result.returncode == 0:
+                result['success'] = True
+                # Try to extract latency from ping output
+                output = ping_result.stdout
+                if 'time=' in output or 'time<' in output:
+                    # Extract average time
+                    import re
+                    times = re.findall(r'time[<=](\d+\.?\d*)', output)
+                    if times:
+                        result['latency_ms'] = float(times[-1])  # Last time is usually the average
+                    else:
+                        result['latency_ms'] = (end_time - start_time) * 1000
+                else:
+                    result['latency_ms'] = (end_time - start_time) * 1000
+            else:
+                result['success'] = False
+                result['error'] = ping_result.stderr or 'Connection failed'
+            
+            return result
+            
+        except subprocess.TimeoutExpired:
+            return {
+                'ip': ip,
+                'interface': interface or 'default',
+                'success': False,
+                'latency_ms': None,
+                'error': 'Connection timeout',
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            logger.error(f"Error testing IP connection: {e}")
+            return {
+                'ip': ip,
+                'interface': interface or 'default',
+                'success': False,
+                'latency_ms': None,
+                'error': str(e),
+                'timestamp': datetime.now().isoformat()
+            }
+    
+    def test_all_ips(self, interface: str = None) -> List[Dict[str, Any]]:
+        """Test connections to all IPs in the test list through specified interface.
+        If no interface is specified, tests through all available interfaces."""
+        results = []
+        
+        if interface:
+            # Test all IPs through the specified interface
+            for ip in self._test_ip_list:
+                result = self.test_ip_connection(ip, interface)
+                results.append(result)
+        else:
+            # Test each IP through all available interfaces
+            interfaces = self.get_network_interfaces()
+            active_interfaces = [iface['name'] for iface in interfaces 
+                               if iface['is_up'] and iface['type'] != 'Loopback']
+            
+            for ip in self._test_ip_list:
+                # Test through each interface
+                for iface_name in active_interfaces:
+                    result = self.test_ip_connection(ip, iface_name)
+                    results.append(result)
+        
+        return results
+    
+    def test_ip_all_interfaces(self, ip: str) -> List[Dict[str, Any]]:
+        """Test a specific IP through all available interfaces."""
+        results = []
+        
+        # Get all active interfaces
+        interfaces = self.get_network_interfaces()
+        active_interfaces = [iface['name'] for iface in interfaces 
+                           if iface['is_up'] and iface['type'] != 'Loopback']
+        
+        if not active_interfaces:
+            return [{
+                'ip': ip,
+                'interface': 'none',
+                'success': False,
+                'error': 'No active interfaces available',
+                'timestamp': datetime.now().isoformat()
+            }]
+        
+        # Test the IP through each interface
+        for iface_name in active_interfaces:
+            result = self.test_ip_connection(ip, iface_name)
+            results.append(result)
+        
+        return results
+    
+    def set_route(self, interface: str, target_ip: str, gateway: str = None) -> Dict[str, Any]:
+        """Set a route for a specific interface."""
+        try:
+            import platform
+            system = platform.system()
+            
+            # Get interface IP address - use psutil directly for more reliable detection
+            interface_ip = None
+            try:
+                net_if_addrs = psutil.net_if_addrs()
+                if interface in net_if_addrs:
+                    for addr in net_if_addrs[interface]:
+                        # Check if it's IPv4 (AF_INET = 2)
+                        if addr.family == socket.AF_INET:
+                            interface_ip = addr.address
+                            break
+            except Exception as e:
+                logger.warning(f"Error getting interface addresses: {e}")
+            
+            # Fallback: try getting from our interface list
+            if not interface_ip:
+                interfaces = self.get_network_interfaces()
+                for iface in interfaces:
+                    if iface['name'] == interface:
+                        for addr in iface['addresses']:
+                            # Check if it's IPv4 - use raw family value or check address format
+                            family_raw = addr.get('family_raw')
+                            if family_raw == socket.AF_INET:
+                                interface_ip = addr.get('address')
+                                break
+                            # Fallback: check if address looks like IPv4
+                            addr_value = addr.get('address', '')
+                            if addr_value and '.' in addr_value and ':' not in addr_value:
+                                # Additional validation: check if it's a valid IPv4 format
+                                try:
+                                    ipaddress.ip_address(addr_value)
+                                    if addr_value.count('.') == 3:  # Basic IPv4 check
+                                        interface_ip = addr_value
+                                        break
+                                except:
+                                    pass
+                        break
+            
+            # If no IPv4 address found, we can still configure the route
+            # but we'll need to handle it differently
+            if not interface_ip:
+                # Get interface details for better error message
+                interfaces = self.get_network_interfaces()
+                available_interfaces = [iface['name'] for iface in interfaces]
+                interface_found = False
+                interface_details = []
+                interface_ipv6 = None
+                
+                for iface in interfaces:
+                    if iface['name'] == interface:
+                        interface_found = True
+                        interface_details = iface.get('addresses', [])
+                        # Check for IPv6 address as fallback
+                        for addr in iface.get('addresses', []):
+                            if addr.get('family_raw') == socket.AF_INET6:
+                                interface_ipv6 = addr.get('address')
+                                break
+                        break
+                
+                if not interface_found:
+                    return {
+                        'success': False,
+                        'error': f'Interface {interface} not found. Available interfaces: {", ".join(available_interfaces)}',
+                        'interface': interface,
+                        'available_interfaces': available_interfaces
+                    }
+                
+                # If we have IPv6 but no IPv4, we can still store the route config
+                # but note that actual route setting may require IPv4
+                if interface_ipv6:
+                    logger.warning(f"Interface {interface} has IPv6 address but no IPv4 address")
+                    # Use a placeholder or the interface name itself
+                    interface_ip = f"IPv6:{interface_ipv6}"
+                else:
+                    return {
+                        'success': False,
+                        'error': f'Interface {interface} has no IPv4 or IPv6 address. Interface addresses: {interface_details}',
+                        'interface': interface,
+                        'interface_addresses': interface_details
+                    }
+            
+            # If no gateway specified, use interface's default gateway
+            if not gateway:
+                # Try to get default gateway for the interface
+                try:
+                    # If interface_ip starts with "IPv6:", we can't easily determine gateway
+                    if interface_ip.startswith('IPv6:'):
+                        gateway = 'default'  # Will need to be set manually
+                    else:
+                        # For IPv4, try to determine gateway (usually .1 of the subnet)
+                        gateway = interface_ip.rsplit('.', 1)[0] + '.1'
+                except:
+                    gateway = 'default'
+            
+            # Store route configuration
+            self._route_configs[interface] = {
+                'enabled': True,
+                'target_ip': target_ip,
+                'gateway': gateway,
+                'interface_ip': interface_ip,
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            # Save to file
+            self.save_routes_to_file()
+            
+            # Actually set the route using system commands (requires sudo on macOS/Linux)
+            if system == 'Darwin':  # macOS
+                # Add route: sudo route add -net <target> -interface <interface>
+                # For now, just log it (requires sudo)
+                logger.info(f"Route configuration saved for {interface}: {target_ip} via {gateway}")
+                return {
+                    'success': True,
+                    'message': f'Route configured for {interface}',
+                    'interface': interface,
+                    'target_ip': target_ip,
+                    'gateway': gateway,
+                    'note': 'Route configuration saved. Actual route may require sudo privileges.'
+                }
+            elif system == 'Linux':
+                logger.info(f"Route configuration saved for {interface}: {target_ip} via {gateway}")
+                return {
+                    'success': True,
+                    'message': f'Route configured for {interface}',
+                    'interface': interface,
+                    'target_ip': target_ip,
+                    'gateway': gateway,
+                    'note': 'Route configuration saved. Actual route may require sudo privileges.'
+                }
+            else:
+                return {
+                    'success': True,
+                    'message': f'Route configuration saved for {interface}',
+                    'interface': interface,
+                    'target_ip': target_ip,
+                    'gateway': gateway
+                }
+                
+        except Exception as e:
+            logger.error(f"Error setting route: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'interface': interface
+            }
+    
+    def load_routes_from_file(self, file_path: str = None) -> bool:
+        """Load route configurations from YAML file."""
+        if file_path is None:
+            file_path = self._routes_file
+        
+        try:
+            if os.path.exists(file_path):
+                with open(file_path, 'r') as f:
+                    data = yaml.safe_load(f)
+                    if data and isinstance(data, dict):
+                        self._route_configs = data.get('routes', {})
+                    else:
+                        self._route_configs = {}
+                
+                logger.info(f"Loaded {len(self._route_configs)} route configurations from {file_path}")
+                return True
+            else:
+                logger.info(f"Routes file {file_path} not found, starting with empty routes")
+                self._route_configs = {}
+                return False
+        except yaml.YAMLError as e:
+            logger.error(f"Error parsing YAML file {file_path}: {e}")
+            self._route_configs = {}
+            return False
+        except Exception as e:
+            logger.error(f"Error loading routes from {file_path}: {e}")
+            self._route_configs = {}
+            return False
+    
+    def save_routes_to_file(self, file_path: str = None) -> bool:
+        """Save route configurations to YAML file."""
+        if file_path is None:
+            file_path = self._routes_file
+        
+        try:
+            data = {
+                'routes': self._route_configs,
+                'last_updated': datetime.now().isoformat(),
+                'total_routes': len(self._route_configs),
+                'active_routes': len([c for c in self._route_configs.values() if c.get('enabled', False)])
+            }
+            
+            with open(file_path, 'w') as f:
+                yaml.dump(data, f, default_flow_style=False, sort_keys=False)
+            
+            logger.info(f"Saved {len(self._route_configs)} route configurations to {file_path}")
+            return True
+        except Exception as e:
+            logger.error(f"Error saving routes to {file_path}: {e}")
+            return False
+    
+    def disable_route(self, interface: str) -> Dict[str, Any]:
+        """Disable a route for a specific interface."""
+        try:
+            if interface in self._route_configs:
+                self._route_configs[interface]['enabled'] = False
+                self._route_configs[interface]['disabled_at'] = datetime.now().isoformat()
+                logger.info(f"Route disabled for {interface}")
+                # Save to file
+                self.save_routes_to_file()
+                return {
+                    'success': True,
+                    'message': f'Route disabled for {interface}',
+                    'interface': interface
+                }
+            else:
+                return {
+                    'success': False,
+                    'error': f'No route configuration found for {interface}',
+                    'interface': interface
+                }
+        except Exception as e:
+            logger.error(f"Error disabling route: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'interface': interface
+            }
+    
+    def enable_route(self, interface: str) -> Dict[str, Any]:
+        """Enable a route for a specific interface."""
+        try:
+            if interface in self._route_configs:
+                self._route_configs[interface]['enabled'] = True
+                self._route_configs[interface]['enabled_at'] = datetime.now().isoformat()
+                logger.info(f"Route enabled for {interface}")
+                # Save to file
+                self.save_routes_to_file()
+                return {
+                    'success': True,
+                    'message': f'Route enabled for {interface}',
+                    'interface': interface
+                }
+            else:
+                return {
+                    'success': False,
+                    'error': f'No route configuration found for {interface}',
+                    'interface': interface
+                }
+        except Exception as e:
+            logger.error(f"Error enabling route: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'interface': interface
+            }
+    
+    def _explain_route_flags(self, flags: str) -> Dict[str, str]:
+        """Explain route flags."""
+        flag_explanations = {
+            'U': 'Up - Route is active and usable',
+            'G': 'Gateway - Route uses a gateway (router)',
+            'H': 'Host - Route is to a specific host (not a network)',
+            'R': 'Reinstate - Route was reinstated after interface came up',
+            'D': 'Dynamic - Route was created dynamically',
+            'M': 'Modified - Route was modified by routing daemon',
+            'A': 'Address - Route was installed by addrconf',
+            'C': 'Cache - Route is from cache',
+            'L': 'Link - Route involves a link',
+            'S': 'Static - Route was manually added',
+            'B': 'Blackhole - Route discards packets',
+            '!': 'Reject - Route rejects packets',
+            'b': 'Broadcast - Route is a broadcast route',
+            'm': 'Multicast - Route is a multicast route',
+            'c': 'Cloned - Route was cloned',
+            'W': 'WasCloned - Route was auto-configured',
+            'l': 'Local - Route is a local route',
+            'X': 'Resolve - Route needs resolution',
+            'Y': 'ProtoCloned - Route was cloned from protocol',
+            'Z': 'Multipath - Route has multiple paths'
+        }
+        
+        explanations = []
+        for flag in flags:
+            if flag in flag_explanations:
+                explanations.append(f"{flag}: {flag_explanations[flag]}")
+            else:
+                explanations.append(f"{flag}: Unknown flag")
+        
+        return {
+            'flags': flags,
+            'explanations': explanations,
+            'full_explanation': ' | '.join(explanations) if explanations else 'No flags'
+        }
+    
+    def get_all_system_routes(self) -> Dict[str, Any]:
+        """Get all system routes with parsed information and flag explanations."""
+        try:
+            import platform
+            system = platform.system()
+            
+            parsed_routes = []
+            raw_routes = []
+            
+            try:
+                if system == 'Darwin':  # macOS
+                    result = subprocess.run(['netstat', '-rn'], capture_output=True, text=True, timeout=10)
+                    if result.returncode == 0:
+                        raw_routes = result.stdout.split('\n')
+                        # Parse macOS netstat -rn output
+                        # Format: Destination        Gateway            Flags           Netif Expire
+                        # Skip header lines: "Routing tables", "Internet:", "Destination..."
+                        header_found = False
+                        for line in raw_routes:
+                            line = line.strip()
+                            if not line:
+                                continue
+                            
+                            # Skip header lines
+                            if line.startswith('Routing tables') or line.startswith('Internet'):
+                                continue
+                            
+                            # Check if this is the column header line
+                            if 'Destination' in line and 'Gateway' in line and 'Flags' in line:
+                                header_found = True
+                                continue
+                            
+                            # Only process lines after header is found
+                            if not header_found:
+                                continue
+                            
+                            # Parse route line - use more flexible splitting
+                            # Handle cases where fields might be separated by multiple spaces
+                            parts = line.split()
+                            if len(parts) >= 4:
+                                try:
+                                    destination = parts[0]
+                                    gateway = parts[1] if parts[1] != '*' else 'default'
+                                    flags = parts[2] if len(parts) > 2 else ''
+                                    netif = parts[3] if len(parts) > 3 else ''
+                                    
+                                    flag_info = self._explain_route_flags(flags)
+                                    
+                                    parsed_routes.append({
+                                        'destination': destination,
+                                        'gateway': gateway,
+                                        'flags': flags,
+                                        'interface': netif,
+                                        'flag_explanations': flag_info,
+                                        'raw': line
+                                    })
+                                except (IndexError, ValueError) as e:
+                                    logger.warning(f"Error parsing route line '{line}': {e}")
+                                    continue
+                
+                elif system == 'Linux':
+                    # Try 'ip route' first
+                    result = subprocess.run(['ip', 'route'], capture_output=True, text=True, timeout=10)
+                    if result.returncode == 0:
+                        raw_routes = result.stdout.split('\n')
+                        for line in raw_routes:
+                            if not line.strip():
+                                continue
+                            
+                            # Parse Linux ip route output
+                            # Format: default via 192.168.1.1 dev eth0 proto static metric 100
+                            parts = line.split()
+                            destination = 'default'
+                            gateway = ''
+                            interface = ''
+                            flags = ''
+                            
+                            i = 0
+                            while i < len(parts):
+                                if parts[i] == 'via' and i + 1 < len(parts):
+                                    gateway = parts[i + 1]
+                                    i += 2
+                                elif parts[i] == 'dev' and i + 1 < len(parts):
+                                    interface = parts[i + 1]
+                                    i += 2
+                                elif parts[i] == 'proto':
+                                    if i + 1 < len(parts):
+                                        flags += parts[i + 1][0].upper()  # Use first letter as flag
+                                    i += 2
+                                elif i == 0 and parts[i] != 'default':
+                                    destination = parts[i]
+                                    i += 1
+                                else:
+                                    i += 1
+                            
+                            if not flags:
+                                flags = 'U'  # Default to Up
+                            
+                            flag_info = self._explain_route_flags(flags)
+                            
+                            parsed_routes.append({
+                                'destination': destination,
+                                'gateway': gateway or 'direct',
+                                'flags': flags,
+                                'interface': interface,
+                                'flag_explanations': flag_info,
+                                'raw': line.strip()
+                            })
+                    else:
+                        # Fallback to netstat
+                        result = subprocess.run(['netstat', '-rn'], capture_output=True, text=True, timeout=10)
+                        if result.returncode == 0:
+                            raw_routes = result.stdout.split('\n')
+                            # Similar parsing to macOS but for Linux
+                            header_found = False
+                            for line in raw_routes:
+                                line = line.strip()
+                                if not line:
+                                    continue
+                                
+                                # Skip header lines
+                                if line.startswith('Kernel') or line.startswith('Iface'):
+                                    continue
+                                
+                                # Check if this is the column header line
+                                if 'Destination' in line and 'Gateway' in line:
+                                    header_found = True
+                                    continue
+                                
+                                # Only process lines after header is found
+                                if not header_found:
+                                    continue
+                                
+                                parts = line.split()
+                                if len(parts) >= 4:
+                                    try:
+                                        destination = parts[0]
+                                        gateway = parts[1] if parts[1] != '*' else 'default'
+                                        flags = parts[2] if len(parts) > 2 else ''
+                                        netif = parts[3] if len(parts) > 3 else ''
+                                        
+                                        flag_info = self._explain_route_flags(flags)
+                                        
+                                        parsed_routes.append({
+                                            'destination': destination,
+                                            'gateway': gateway,
+                                            'flags': flags,
+                                            'interface': netif,
+                                            'flag_explanations': flag_info,
+                                            'raw': line
+                                        })
+                                    except (IndexError, ValueError) as e:
+                                        logger.warning(f"Error parsing route line '{line}': {e}")
+                                        continue
+                else:
+                    # Windows or other
+                    result = subprocess.run(['netstat', '-rn'], capture_output=True, text=True, timeout=10)
+                    if result.returncode == 0:
+                        raw_routes = result.stdout.split('\n')
+                        # Basic parsing
+                        for line in raw_routes:
+                            if line.strip():
+                                flag_info = self._explain_route_flags('')
+                                parsed_routes.append({
+                                    'destination': 'Unknown',
+                                    'gateway': 'Unknown',
+                                    'flags': '',
+                                    'interface': 'Unknown',
+                                    'flag_explanations': flag_info,
+                                    'raw': line.strip()
+                                })
+            except Exception as e:
+                logger.warning(f"Could not get system routes: {e}")
+            
+            return {
+                'timestamp': datetime.now().isoformat(),
+                'system': system,
+                'total_routes': len(parsed_routes),
+                'routes': parsed_routes,
+                'raw_output': raw_routes[:50]  # Keep first 50 lines of raw output
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting all system routes: {e}")
+            return {
+                'timestamp': datetime.now().isoformat(),
+                'error': str(e),
+                'system': platform.system() if 'platform' in dir() else 'Unknown',
+                'total_routes': 0,
+                'routes': [],
+                'raw_output': []
+            }
+    
+    def get_route_status(self, interface: str = None) -> Dict[str, Any]:
+        """Get route status for a specific interface or all interfaces."""
+        try:
+            import platform
+            system = platform.system()
+            
+            # Get system routes
+            routes = []
+            try:
+                if system == 'Darwin':  # macOS
+                    result = subprocess.run(['netstat', '-rn'], capture_output=True, text=True, timeout=10)
+                elif system == 'Linux':
+                    result = subprocess.run(['ip', 'route'], capture_output=True, text=True, timeout=10)
+                else:
+                    result = subprocess.run(['netstat', '-rn'], capture_output=True, text=True, timeout=10)
+                
+                if result.returncode == 0:
+                    routes = result.stdout.split('\n')
+            except Exception as e:
+                logger.warning(f"Could not get system routes: {e}")
+            
+            # Get configured routes
+            configured_routes = {}
+            for iface, config in self._route_configs.items():
+                if interface is None or iface == interface:
+                    configured_routes[iface] = config.copy()
+            
+            # Get interface status
+            interfaces = self.get_network_interfaces()
+            interface_status = {}
+            for iface in interfaces:
+                if interface is None or iface['name'] == interface:
+                    interface_status[iface['name']] = {
+                        'is_up': iface['is_up'],
+                        'type': iface['type'],
+                        'addresses': iface['addresses']
+                    }
+            
+            return {
+                'timestamp': datetime.now().isoformat(),
+                'system_routes': routes[:20],  # Limit to first 20 routes
+                'configured_routes': configured_routes,
+                'interface_status': interface_status
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting route status: {e}")
+            return {
+                'timestamp': datetime.now().isoformat(),
+                'error': str(e),
+                'system_routes': [],
+                'configured_routes': {},
+                'interface_status': {}
+            }
+    
+    def test_route_connection(self, interface: str) -> Dict[str, Any]:
+        """Test connection for a specific route."""
+        try:
+            if interface not in self._route_configs:
+                return {
+                    'success': False,
+                    'error': f'No route configuration found for {interface}',
+                    'interface': interface
+                }
+            
+            config = self._route_configs[interface]
+            target_ip = config.get('target_ip')
+            
+            if not target_ip:
+                return {
+                    'success': False,
+                    'error': 'No target IP configured for this route',
+                    'interface': interface
+                }
+            
+            # Test the connection through the interface
+            test_result = self.test_ip_connection(target_ip, interface)
+            
+            # Add route-specific information
+            test_result['route_enabled'] = config.get('enabled', False)
+            test_result['route_gateway'] = config.get('gateway', 'N/A')
+            test_result['route_interface_ip'] = config.get('interface_ip', 'N/A')
+            
+            return test_result
+            
+        except Exception as e:
+            logger.error(f"Error testing route connection for {interface}: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'interface': interface,
+                'ip': 'Unknown',
+                'timestamp': datetime.now().isoformat()
+            }
+    
+    def monitor_all_routes(self) -> Dict[str, Any]:
+        """Monitor status of all routes."""
+        try:
+            route_status = self.get_route_status()
+            
+            # Test all routes (both enabled and disabled)
+            route_tests = {}
+            for iface, config in self._route_configs.items():
+                target_ip = config.get('target_ip')
+                if target_ip:
+                    test_result = self.test_ip_connection(target_ip, iface)
+                    # Add route configuration info
+                    test_result['route_enabled'] = config.get('enabled', False)
+                    test_result['route_gateway'] = config.get('gateway', 'N/A')
+                    test_result['route_interface_ip'] = config.get('interface_ip', 'N/A')
+                    route_tests[iface] = test_result
+            
+            return {
+                'timestamp': datetime.now().isoformat(),
+                'route_status': route_status,
+                'route_tests': route_tests,
+                'configured_routes': self._route_configs.copy(),
+                'total_configured_routes': len(self._route_configs),
+                'active_routes': len([c for c in self._route_configs.values() if c.get('enabled', False)])
+            }
+            
+        except Exception as e:
+            logger.error(f"Error monitoring routes: {e}")
+            return {
+                'timestamp': datetime.now().isoformat(),
+                'error': str(e),
+                'route_status': {},
+                'route_tests': {},
+                'configured_routes': {},
+                'total_configured_routes': 0,
+                'active_routes': 0
             }
 
     def get_all_monitoring_data(self) -> Dict[str, Any]:

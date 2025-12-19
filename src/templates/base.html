@@ -30,7 +30,7 @@
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
+                <ul class="navbar-nav me-auto">
                     <li class="nav-item">
                         <a class="nav-link" href="/">
                             <i class="fas fa-tachometer-alt me-1"></i>Dashboard
@@ -67,9 +67,51 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link" href="/network-interfaces">
+                            <i class="fas fa-network-wired me-1"></i>Network Interfaces
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/rsync">
+                            <i class="fas fa-sync-alt me-1"></i>Rsync
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/postgres-sync">
+                            <i class="fas fa-database me-1"></i>PostgreSQL Sync
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link" href="/config">
                             <i class="fas fa-cog me-1"></i>Config
                         </a>
+                    </li>
+                </ul>
+                <ul class="navbar-nav">
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-user-circle me-1"></i>
+                            <span id="current-username">User</span>
+                            <span class="badge bg-{{ 'danger' if current_user.is_authenticated and current_user.is_admin() else 'secondary' }}" id="user-role-badge">
+                                {{ current_user.role|title if current_user.is_authenticated else 'Guest' }}
+                            </span>
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><h6 class="dropdown-header">
+                                <i class="fas fa-user me-1"></i>Logged in as: <strong id="dropdown-username">{{ current_user.username if current_user.is_authenticated else 'Guest' }}</strong>
+                            </h6></li>
+                            <li><h6 class="dropdown-header">
+                                Role: <span class="badge bg-{{ 'danger' if current_user.is_authenticated and current_user.is_admin() else 'secondary' }}">{{ current_user.role|title if current_user.is_authenticated else 'Guest' }}</span>
+                            </h6></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{{ url_for('profile_page') }}">
+                                <i class="fas fa-user-edit me-1"></i>Profile
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{{ url_for('logout') }}">
+                                <i class="fas fa-sign-out-alt me-1"></i>Logout
+                            </a></li>
+                        </ul>
                     </li>
                 </ul>
             </div>
@@ -99,8 +141,27 @@
             }
         }
         
-        // Start auto-refresh when page loads
+        // User role and permissions
+        const userCanEdit = {{ 'true' if current_user.is_authenticated and current_user.can_edit() else 'false' }};
+        const userRole = '{{ current_user.role if current_user.is_authenticated else "guest" }}';
+        const username = '{{ current_user.username if current_user.is_authenticated else "Guest" }}';
+        
+        // Update username display
         document.addEventListener('DOMContentLoaded', function() {
+            if (document.getElementById('current-username')) {
+                document.getElementById('current-username').textContent = username;
+            }
+            if (document.getElementById('dropdown-username')) {
+                document.getElementById('dropdown-username').textContent = username;
+            }
+            
+            // Hide edit buttons for viewers
+            if (!userCanEdit) {
+                document.querySelectorAll('[data-requires-edit]').forEach(function(el) {
+                    el.style.display = 'none';
+                });
+            }
+            
             startAutoRefresh();
         });
         
