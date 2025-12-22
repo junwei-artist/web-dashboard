@@ -7,10 +7,13 @@ Provides web interface for monitoring services, ports, and databases.
 from flask import Flask, render_template, jsonify, request, abort, redirect, url_for, flash
 from flask_socketio import SocketIO, emit
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
+from flask_cors import CORS
 from backend import SystemMonitor
 from config_manager import ConfigManager
 from rsync_manager import RsyncManager
 from postgres_sync_manager import PostgresSyncManager
+from autossh_manager import AutosshManager
+from ollama_gateway_manager import OllamaGatewayManager
 from auth import auth_manager, login_manager, can_edit_required
 import logging
 import json
@@ -20,6 +23,8 @@ from datetime import datetime
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key-here-change-in-production'
+# Enable CORS for Next.js frontend on port 9200
+CORS(app, origins=['http://localhost:9200', 'http://127.0.0.1:9200'], supports_credentials=True)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
 # Initialize login manager
@@ -31,6 +36,8 @@ monitor = SystemMonitor()
 config_manager = ConfigManager()
 rsync_manager = RsyncManager()
 postgres_sync_manager = PostgresSyncManager()
+autossh_manager = AutosshManager()
+ollama_gateway_manager = OllamaGatewayManager()
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -77,8 +84,8 @@ def before_request():
     if request.path.startswith('/static'):
         return
     
-    # Skip authentication for login page (but still check IP)
-    if request.endpoint == 'login':
+    # Skip authentication for login page and auth check endpoint (but still check IP)
+    if request.endpoint == 'login' or request.path == '/api/auth/check':
         check_ip_access()
         return
     
@@ -87,10 +94,23 @@ def before_request():
     
     # Require login for all other routes
     if not current_user.is_authenticated:
-        if request.endpoint and not request.endpoint.startswith('api'):
-            return redirect(url_for('login', next=request.url))
-        elif request.endpoint and request.endpoint.startswith('api'):
+        # Check if it's an API route by path (more reliable than endpoint name)
+        if request.path.startswith('/api/'):
             return jsonify({'error': 'Authentication required'}), 401
+        else:
+            # For non-API routes, redirect to login
+            # Don't use request.url as it contains backend URL
+            # Instead, construct frontend URL from headers if available
+            frontend_host = request.headers.get('X-Forwarded-Host')
+            if frontend_host:
+                # Request came through proxy, use frontend host
+                frontend_url = f'http://{frontend_host}{request.path}'
+                if request.query_string:
+                    frontend_url += f'?{request.query_string.decode()}'
+                return redirect(f'http://{frontend_host}/login?next={frontend_url}')
+            else:
+                # Direct access to backend, use backend URL
+                return redirect(url_for('login', next=request.url))
 
 def update_monitoring_data():
     """Background thread to continuously update monitoring data."""
@@ -184,6 +204,18 @@ def change_password():
 def index():
     """Main dashboard page."""
     return render_template('dashboard.html')
+
+@app.route('/api/auth/check')
+def check_auth():
+    """API endpoint to check if user is authenticated."""
+    if current_user.is_authenticated:
+        return jsonify({
+            'authenticated': True,
+            'username': current_user.username,
+            'role': current_user.role if hasattr(current_user, 'role') else 'viewer'
+        })
+    else:
+        return jsonify({'authenticated': False}), 401
 
 @app.route('/api/monitoring-data')
 @login_required
@@ -1080,6 +1112,424 @@ def handle_unsubscribe_postgres_job(data):
     if job_id and job_id in postgres_sync_manager.output_callbacks:
         del postgres_sync_manager.output_callbacks[job_id]
         emit('unsubscribed', {'job_id': job_id, 'message': 'Unsubscribed from job output'})
+
+# Autossh routes
+@app.route('/autossh')
+@login_required
+def autossh_page():
+    """Autossh management page."""
+    return render_template('autossh.html')
+
+@app.route('/api/autossh/tunnels', methods=['GET'])
+@login_required
+def get_autossh_tunnels():
+    """Get all autossh tunnels."""
+    try:
+        tunnels = autossh_manager.get_all_tunnels()
+        return jsonify({'success': True, 'tunnels': tunnels})
+    except Exception as e:
+        logger.error(f"Error getting autossh tunnels: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/autossh/tunnels', methods=['POST'])
+@login_required
+@can_edit_required
+def create_autossh_tunnel():
+    """Create a new autossh tunnel."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'Request body required'}), 400
+        
+        tunnel_id = autossh_manager.add_tunnel(data)
+        return jsonify({'success': True, 'tunnel_id': tunnel_id, 'message': 'Tunnel created successfully'})
+    except Exception as e:
+        logger.error(f"Error creating autossh tunnel: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/autossh/tunnels/<tunnel_id>', methods=['PUT'])
+@login_required
+@can_edit_required
+def update_autossh_tunnel(tunnel_id):
+    """Update an autossh tunnel."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'Request body required'}), 400
+        
+        if autossh_manager.update_tunnel(tunnel_id, data):
+            return jsonify({'success': True, 'message': 'Tunnel updated successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'Tunnel not found or is running'}), 404
+    except Exception as e:
+        logger.error(f"Error updating autossh tunnel: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/autossh/tunnels/<tunnel_id>', methods=['DELETE'])
+@login_required
+@can_edit_required
+def delete_autossh_tunnel(tunnel_id):
+    """Delete an autossh tunnel."""
+    try:
+        if autossh_manager.delete_tunnel(tunnel_id):
+            return jsonify({'success': True, 'message': 'Tunnel deleted successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'Tunnel not found'}), 404
+    except Exception as e:
+        logger.error(f"Error deleting autossh tunnel: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/autossh/tunnels/<tunnel_id>/start', methods=['POST'])
+@login_required
+@can_edit_required
+def start_autossh_tunnel(tunnel_id):
+    """Start an autossh tunnel."""
+    try:
+        if autossh_manager.start_tunnel(tunnel_id):
+            return jsonify({'success': True, 'message': 'Tunnel started successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'Tunnel not found or already running'}), 400
+    except Exception as e:
+        logger.error(f"Error starting autossh tunnel: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/autossh/tunnels/<tunnel_id>/stop', methods=['POST'])
+@login_required
+@can_edit_required
+def stop_autossh_tunnel(tunnel_id):
+    """Stop an autossh tunnel."""
+    try:
+        if autossh_manager.stop_tunnel(tunnel_id):
+            return jsonify({'success': True, 'message': 'Tunnel stopped successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'Tunnel not found or not running'}), 400
+    except Exception as e:
+        logger.error(f"Error stopping autossh tunnel: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/autossh/tunnels/<tunnel_id>/logs', methods=['GET'])
+@login_required
+def get_autossh_tunnel_logs(tunnel_id):
+    """Get logs for an autossh tunnel (last 30 entries)."""
+    try:
+        limit = request.args.get('limit', 30, type=int)
+        logs = autossh_manager.get_tunnel_logs(tunnel_id, limit=limit)
+        return jsonify({'success': True, 'logs': logs})
+    except Exception as e:
+        logger.error(f"Error getting autossh tunnel logs: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/autossh/tunnels/<tunnel_id>/command', methods=['GET'])
+@login_required
+def get_autossh_tunnel_command(tunnel_id):
+    """Get the autossh command string for a tunnel."""
+    try:
+        command = autossh_manager.get_tunnel_command(tunnel_id)
+        if command:
+            return jsonify({'success': True, 'command': command})
+        else:
+            return jsonify({'success': False, 'error': 'Tunnel not found'}), 404
+    except Exception as e:
+        logger.error(f"Error getting autossh tunnel command: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/autossh/ssh-connections', methods=['GET'])
+@login_required
+def get_ssh_connections():
+    """Get all active SSH connections on the system."""
+    try:
+        connections = monitor.get_ssh_connections()
+        return jsonify({'success': True, 'connections': connections})
+    except Exception as e:
+        logger.error(f"Error getting SSH connections: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/autossh/ssh-connections/<int:pid>/kill', methods=['POST'])
+@login_required
+@can_edit_required
+def kill_ssh_connection(pid):
+    """Kill an SSH connection by PID."""
+    try:
+        result = monitor.kill_ssh_connection(pid)
+        if result['success']:
+            return jsonify(result), 200
+        else:
+            return jsonify(result), 400
+    except Exception as e:
+        logger.error(f"Error killing SSH connection {pid}: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/autossh/ssh-connections/kill-log', methods=['GET'])
+@login_required
+def get_killed_ssh_connections_log():
+    """Get the log of killed SSH connections."""
+    try:
+        log = monitor.get_killed_ssh_connections_log()
+        return jsonify({'success': True, 'log': log})
+    except Exception as e:
+        logger.error(f"Error getting kill log: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@socketio.on('subscribe_autossh_tunnel')
+def handle_subscribe_autossh_tunnel(data):
+    """Subscribe to an autossh tunnel's real-time output."""
+    tunnel_id = data.get('tunnel_id')
+    if tunnel_id:
+        # Set up callback for this tunnel
+        def output_callback(output_data):
+            socketio.emit('autossh_tunnel_output', {
+                'tunnel_id': tunnel_id,
+                'data': output_data
+            })
+        
+        autossh_manager.set_output_callback(tunnel_id, output_callback)
+        emit('subscribed', {'tunnel_id': tunnel_id, 'message': 'Subscribed to tunnel output'})
+
+@socketio.on('unsubscribe_autossh_tunnel')
+def handle_unsubscribe_autossh_tunnel(data):
+    """Unsubscribe from an autossh tunnel's real-time output."""
+    tunnel_id = data.get('tunnel_id')
+    if tunnel_id and tunnel_id in autossh_manager.output_callbacks:
+        del autossh_manager.output_callbacks[tunnel_id]
+        emit('unsubscribed', {'tunnel_id': tunnel_id, 'message': 'Unsubscribed from tunnel output'})
+
+# Ollama Gateway routes
+@app.route('/ollama-gateway')
+@login_required
+def ollama_gateway_page():
+    """Ollama Gateway management page."""
+    return render_template('ollama-gateway.html')
+
+
+@app.route('/api/ollama-gateway/api-keys', methods=['GET'])
+@login_required
+def get_ollama_api_keys():
+    """Get all API keys."""
+    try:
+        keys = ollama_gateway_manager.get_all_api_keys()
+        return jsonify({'success': True, 'api_keys': keys})
+    except Exception as e:
+        logger.error(f"Error getting API keys: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/ollama-gateway/api-keys', methods=['POST'])
+@login_required
+@can_edit_required
+def create_ollama_api_key():
+    """Create a new API key."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'Request body required'}), 400
+        
+        result = ollama_gateway_manager.generate_api_key(
+            name=data.get('name', ''),
+            description=data.get('description', ''),
+            rate_limit=data.get('rate_limit'),
+            token_limit=data.get('token_limit')
+        )
+        return jsonify({'success': True, **result})
+    except Exception as e:
+        logger.error(f"Error creating API key: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/ollama-gateway/api-keys/<api_key>', methods=['PUT'])
+@login_required
+@can_edit_required
+def update_ollama_api_key(api_key):
+    """Update an API key."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'Request body required'}), 400
+        
+        success = ollama_gateway_manager.update_api_key(api_key, data)
+        if success:
+            return jsonify({'success': True, 'message': 'API key updated successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'API key not found'}), 404
+    except Exception as e:
+        logger.error(f"Error updating API key: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/ollama-gateway/api-keys/<api_key>/revoke', methods=['POST'])
+@login_required
+@can_edit_required
+def revoke_ollama_api_key(api_key):
+    """Revoke an API key."""
+    try:
+        success = ollama_gateway_manager.revoke_api_key(api_key)
+        if success:
+            return jsonify({'success': True, 'message': 'API key revoked successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'API key not found'}), 404
+    except Exception as e:
+        logger.error(f"Error revoking API key: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/ollama-gateway/api-keys/<api_key>', methods=['DELETE'])
+@login_required
+@can_edit_required
+def delete_ollama_api_key(api_key):
+    """Delete an API key."""
+    try:
+        success = ollama_gateway_manager.delete_api_key(api_key)
+        if success:
+            return jsonify({'success': True, 'message': 'API key deleted successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'API key not found'}), 404
+    except Exception as e:
+        logger.error(f"Error deleting API key: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/ollama-gateway/statistics', methods=['GET'])
+@login_required
+def get_ollama_statistics():
+    """Get statistics for API key(s)."""
+    try:
+        api_key = request.args.get('api_key')
+        stats = ollama_gateway_manager.get_statistics(api_key)
+        return jsonify({'success': True, 'statistics': stats})
+    except Exception as e:
+        logger.error(f"Error getting statistics: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/ollama-gateway/queue/status', methods=['GET'])
+@login_required
+def get_ollama_queue_status():
+    """Get queue status for all tasks or a specific task."""
+    try:
+        task_id = request.args.get('task_id')
+        status = ollama_gateway_manager.get_queue_status(task_id)
+        return jsonify({'success': True, 'status': status})
+    except Exception as e:
+        logger.error(f"Error getting queue status: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/ollama-gateway/tasks', methods=['GET'])
+@login_required
+def get_ollama_tasks():
+    """Get all tasks."""
+    try:
+        tasks = ollama_gateway_manager.get_all_tasks()
+        return jsonify({'success': True, 'tasks': tasks})
+    except Exception as e:
+        logger.error(f"Error getting tasks: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/ollama-gateway/tasks', methods=['POST'])
+@login_required
+@can_edit_required
+def create_ollama_task():
+    """Create a new task."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'Request body required'}), 400
+        
+        task_id = ollama_gateway_manager.add_task(data)
+        return jsonify({'success': True, 'task_id': task_id, 'message': 'Task created successfully'})
+    except Exception as e:
+        logger.error(f"Error creating task: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/ollama-gateway/tasks/<task_id>', methods=['PUT'])
+@login_required
+@can_edit_required
+def update_ollama_task(task_id):
+    """Update a task."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'Request body required'}), 400
+        
+        success = ollama_gateway_manager.update_task(task_id, data)
+        if success:
+            return jsonify({'success': True, 'message': 'Task updated successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'Task not found or is running'}), 404
+    except Exception as e:
+        logger.error(f"Error updating task: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/ollama-gateway/tasks/<task_id>', methods=['DELETE'])
+@login_required
+@can_edit_required
+def delete_ollama_task(task_id):
+    """Delete a task."""
+    try:
+        success = ollama_gateway_manager.delete_task(task_id)
+        if success:
+            return jsonify({'success': True, 'message': 'Task deleted successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'Task not found'}), 404
+    except Exception as e:
+        logger.error(f"Error deleting task: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/ollama-gateway/tasks/<task_id>/start', methods=['POST'])
+@login_required
+@can_edit_required
+def start_ollama_task(task_id):
+    """Start a task."""
+    try:
+        success = ollama_gateway_manager.start_task(task_id)
+        if success:
+            return jsonify({'success': True, 'message': 'Task started successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'Task not found or already running'}), 400
+    except Exception as e:
+        logger.error(f"Error starting task: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/ollama-gateway/tasks/<task_id>/stop', methods=['POST'])
+@login_required
+@can_edit_required
+def stop_ollama_task(task_id):
+    """Stop a task."""
+    try:
+        success = ollama_gateway_manager.stop_task(task_id)
+        if success:
+            return jsonify({'success': True, 'message': 'Task stopped successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'Task not found or not running'}), 400
+    except Exception as e:
+        logger.error(f"Error stopping task: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/ollama-gateway/tasks/<task_id>/monitor', methods=['GET'])
+@login_required
+def get_ollama_task_monitor(task_id):
+    """Get job history/monitor for a task."""
+    try:
+        limit = request.args.get('limit', 50, type=int)
+        history = ollama_gateway_manager.get_task_job_history(task_id, limit=limit)
+        return jsonify({'success': True, 'jobs': history})
+    except Exception as e:
+        logger.error(f"Error getting task monitor: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/ollama-gateway/tasks/<task_id>/api-examples', methods=['GET'])
+@login_required
+def get_ollama_task_api_examples(task_id):
+    """Get API usage examples for a task."""
+    try:
+        examples = ollama_gateway_manager.get_task_api_examples(task_id)
+        return jsonify({'success': True, 'examples': examples})
+    except Exception as e:
+        logger.error(f"Error getting API examples: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/ollama-gateway/tasks/<task_id>/models', methods=['GET'])
+@login_required
+def get_ollama_task_models(task_id):
+    """Get available models from Ollama for a task."""
+    try:
+        models = ollama_gateway_manager.get_task_available_models(task_id)
+        return jsonify({'success': models.get('success', True), 'data': models})
+    except Exception as e:
+        logger.error(f"Error getting models: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.errorhandler(403)
 def forbidden(error):

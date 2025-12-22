@@ -23,6 +23,7 @@ Description-Content-Type: text/markdown
 Requires-Dist: Flask==2.3.3
 Requires-Dist: Flask-SocketIO==5.3.5
 Requires-Dist: Flask-Login==0.6.3
+Requires-Dist: Flask-CORS==4.0.0
 Requires-Dist: psutil==5.9.6
 Requires-Dist: Werkzeug==2.3.7
 Requires-Dist: Jinja2==3.1.2
@@ -35,6 +36,10 @@ Requires-Dist: python-socketio==5.10.0
 Requires-Dist: eventlet==0.33.3
 Requires-Dist: werkzeug==2.3.7
 Requires-Dist: psycopg2-binary==2.9.9
+Requires-Dist: redis==5.0.1
+Requires-Dist: requests==2.31.0
+Requires-Dist: fastapi==0.104.1
+Requires-Dist: uvicorn==0.24.0
 Dynamic: author
 Dynamic: classifier
 Dynamic: description

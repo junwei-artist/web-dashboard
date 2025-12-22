@@ -138,24 +138,67 @@ class ConfigManager:
         if not self.get('security.enable_ip_restriction', False):
             return True
         
+        # Normalize IPv6-mapped IPv4 addresses (e.g., ::ffff:127.0.0.1 -> 127.0.0.1)
+        normalized_ip = self._normalize_ip(client_ip)
+        
         # Check blocked IPs first
         blocked_ips = self.get('security.blocked_ips', [])
-        if self._is_ip_in_list(client_ip, blocked_ips):
+        if self._is_ip_in_list(normalized_ip, blocked_ips):
             if self.get('security.log_access_attempts', True):
-                logger.warning(f"Blocked IP {client_ip} attempted to access dashboard")
+                logger.warning(f"Blocked IP {client_ip} (normalized: {normalized_ip}) attempted to access dashboard")
             return False
         
         # Check allowed IPs
         allowed_ips = self.get('security.allowed_ips', [])
-        if self._is_ip_in_list(client_ip, allowed_ips):
+        if self._is_ip_in_list(normalized_ip, allowed_ips):
             if self.get('security.log_access_attempts', True):
-                logger.info(f"Allowed IP {client_ip} accessed dashboard")
+                logger.info(f"Allowed IP {client_ip} (normalized: {normalized_ip}) accessed dashboard")
             return True
         
         # IP not in allowed list
         if self.get('security.log_access_attempts', True):
-            logger.warning(f"Unauthorized IP {client_ip} attempted to access dashboard")
+            logger.warning(f"Unauthorized IP {client_ip} (normalized: {normalized_ip}) attempted to access dashboard")
         return False
+    
+    def _normalize_ip(self, ip: str) -> str:
+        """Normalize IP address, converting IPv6-mapped IPv4 to IPv4.
+        
+        Args:
+            ip: IP address to normalize
+            
+        Returns:
+            Normalized IP address
+        """
+        try:
+            # Handle IPv6-mapped IPv4 addresses (::ffff:x.x.x.x format)
+            if ip.startswith('::ffff:'):
+                # Extract the IPv4 part
+                ipv4_part = ip[7:]  # Remove '::ffff:' prefix
+                # Validate it's a valid IPv4 address
+                ipaddress.ip_address(ipv4_part)
+                return ipv4_part
+            
+            # Try to parse as IPv6 and check if it's IPv4-mapped
+            addr = ipaddress.ip_address(ip)
+            if isinstance(addr, ipaddress.IPv6Address):
+                # Check if it's an IPv6-mapped IPv4 address
+                try:
+                    # Try to get IPv4 mapped address (available in Python 3.4+)
+                    if hasattr(addr, 'ipv4_mapped') and addr.ipv4_mapped:
+                        return str(addr.ipv4_mapped)
+                except AttributeError:
+                    # Fallback: check if it matches ::ffff: pattern
+                    if ip.startswith('::ffff:'):
+                        ipv4_part = ip[7:]
+                        try:
+                            ipaddress.ip_address(ipv4_part)
+                            return ipv4_part
+                        except ValueError:
+                            pass
+            
+            return ip
+        except ValueError:
+            return ip
     
     def _is_ip_in_list(self, client_ip: str, ip_list: List[str]) -> bool:
         """Check if IP is in the given list (supports CIDR notation).
@@ -173,7 +216,7 @@ class ConfigManager:
             for ip_entry in ip_list:
                 # Handle special cases
                 if ip_entry.lower() == 'localhost':
-                    if client_ip in ['127.0.0.1', '::1']:
+                    if client_ip in ['127.0.0.1', '::1', '::ffff:127.0.0.1']:
                         return True
                     continue
                 

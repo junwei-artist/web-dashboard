@@ -1,0 +1,851 @@
+{% extends "base.html" %}
+
+{% block title %}Autossh - System Monitor{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">
+            <i class="fas fa-network-wired me-2"></i>Autossh Tunnel Manager
+            <small class="text-muted">Manage SSH reverse tunnels</small>
+        </h1>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-12">
+        <button class="btn btn-primary" onclick="showAddTunnelModal()" data-requires-edit>
+            <i class="fas fa-plus me-1"></i>Add New Tunnel
+        </button>
+    </div>
+</div>
+
+<!-- SSH Connections Monitor -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-network-wired me-2"></i>All SSH Connections Monitor
+                </h5>
+                <button class="btn btn-sm btn-outline-secondary" onclick="loadSshConnections()">
+                    <i class="fas fa-sync-alt me-1"></i>Refresh
+                </button>
+            </div>
+            <div class="card-body">
+                <div id="ssh-connections-container">
+                    <div class="text-center text-muted">
+                        <i class="fas fa-spinner fa-spin"></i> Loading SSH connections...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Kill Log -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-history me-2"></i>Killed SSH Connections Log
+                </h5>
+                <button class="btn btn-sm btn-outline-secondary" onclick="loadKillLog()">
+                    <i class="fas fa-sync-alt me-1"></i>Refresh
+                </button>
+            </div>
+            <div class="card-body">
+                <div id="kill-log-container">
+                    <div class="text-center text-muted">
+                        <i class="fas fa-spinner fa-spin"></i> Loading kill log...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="tunnels-container">
+    <!-- Tunnels will be dynamically added here -->
+</div>
+
+<!-- Add/Edit Tunnel Modal -->
+<div class="modal fade" id="tunnelModal" tabindex="-1" aria-labelledby="tunnelModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="tunnelModalLabel">Add Autossh Tunnel</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="tunnelForm">
+                    <input type="hidden" id="tunnelId" name="tunnel_id">
+                    
+                    <div class="mb-3">
+                        <label for="tunnelName" class="form-label">Tunnel Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="tunnelName" name="name" required>
+                        <small class="form-text text-muted">A descriptive name for this tunnel.</small>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="localPort" class="form-label">Local Port <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" id="localPort" name="local_port" value="11434" required>
+                            <small class="form-text text-muted">The local port to forward (e.g., 11434).</small>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="remotePort" class="form-label">Remote Port (optional)</label>
+                            <input type="number" class="form-control" id="remotePort" name="remote_port" placeholder="Leave empty to use local port">
+                            <small class="form-text text-muted">The remote port on the VPS. If empty, uses local port.</small>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-8 mb-3">
+                            <label for="vpsIp" class="form-label">VPS Server IP <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="vpsIp" name="vps_ip" placeholder="47.112.191.42" required>
+                            <small class="form-text text-muted">The IP address of your VPS server.</small>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="vpsPort" class="form-label">VPS SSH Port <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" id="vpsPort" name="vps_port" value="22" required>
+                            <small class="form-text text-muted">SSH port on the VPS (default: 22).</small>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="username" class="form-label">Username <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="username" name="username" value="root" required>
+                            <small class="form-text text-muted">SSH username for VPS authentication.</small>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="sshKeyPath" class="form-label">SSH Private Key Path <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="sshKeyPath" name="ssh_key_path" placeholder="~/.ssh/id_rsa" required>
+                            <small class="form-text text-muted">Path to your SSH private key file (e.g., ~/.ssh/id_rsa or /Users/username/.ssh/id_rsa). Required for authentication.</small>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info mb-3">
+                        <h6><i class="fas fa-info-circle me-1"></i>SSH Key Setup Instructions:</h6>
+                        <small>
+                            <strong>This tunnel requires SSH public key authentication. Follow these steps to set up:</strong><br><br>
+                            <strong>1. Generate SSH Key Pair (if you don't have one):</strong><br>
+                            <code>ssh-keygen -t rsa -b 4096 -C "your_email@example.com"</code><br>
+                            Press Enter to accept default location (~/.ssh/id_rsa) or specify a custom path.<br>
+                            Optionally set a passphrase for extra security.<br><br>
+                            
+                            <strong>2. Copy Public Key to VPS Server:</strong><br>
+                            <code>ssh-copy-id -i ~/.ssh/id_rsa.pub root@47.112.191.42</code><br>
+                            Or manually copy the public key content from <code>~/.ssh/id_rsa.pub</code> and add it to <code>~/.ssh/authorized_keys</code> on the VPS.<br><br>
+                            
+                            <strong>3. Test the Connection:</strong><br>
+                            <code>ssh -i ~/.ssh/id_rsa root@47.112.191.42</code><br>
+                            If this works without asking for a password, your key is set up correctly.<br><br>
+                            
+                            <strong>4. Set Proper Permissions (Important!):</strong><br>
+                            <code>chmod 600 ~/.ssh/id_rsa</code> (private key)<br>
+                            <code>chmod 644 ~/.ssh/id_rsa.pub</code> (public key)<br>
+                            <code>chmod 700 ~/.ssh</code> (SSH directory)<br><br>
+                            
+                            <strong>Note:</strong> The private key file must exist on this machine. Only the public key needs to be on the VPS server.
+                        </small>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="remoteBindAddress" class="form-label">Remote Bind Address <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="remoteBindAddress" name="remote_bind_address" value="0.0.0.0" required>
+                            <small class="form-text text-muted">Address to bind on remote side (usually 0.0.0.0).</small>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label for="serverAliveInterval" class="form-label">Server Alive Interval (seconds) <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" id="serverAliveInterval" name="server_alive_interval" value="30" required>
+                            <small class="form-text text-muted">Interval to send keepalive messages.</small>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label for="serverAliveCountMax" class="form-label">Server Alive Count Max <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" id="serverAliveCountMax" name="server_alive_count_max" value="3" required>
+                            <small class="form-text text-muted">Maximum number of keepalive messages.</small>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="monitorPort" class="form-label">Monitor Port <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" id="monitorPort" name="monitor_port" value="0" required>
+                        <small class="form-text text-muted">Autossh monitor port (0 for no monitoring port).</small>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <h6><i class="fas fa-info-circle me-1"></i>Tunnel Details:</h6>
+                        <small>
+                            This creates a reverse SSH tunnel using autossh. The tunnel forwards traffic from the VPS server to your local machine.<br>
+                            Format: <code>autossh -M [monitor_port] -o "ServerAliveInterval [interval]" -o "ServerAliveCountMax [count]" -N -R [remote_bind]:[remote_port]:127.0.0.1:[local_port] [user]@[vps_ip]</code>
+                        </small>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveTunnel()" data-requires-edit>Save Tunnel</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Logs Modal -->
+<div class="modal fade" id="logsModal" tabindex="-1" aria-labelledby="logsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="logsModalLabel">Tunnel Logs</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <div class="badge bg-info" id="logsTunnelStatus">Status: Unknown</div>
+                </div>
+                <div id="logsContent" style="background-color: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 4px; font-family: monospace; font-size: 12px; max-height: 500px; overflow-y: auto;">
+                    <div class="text-muted">Loading logs...</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+<script>
+const socket = io();
+let tunnels = {};
+let currentLogsTunnelId = null;
+let logsInterval = null;
+
+// Socket.IO event handlers
+socket.on('connect', function() {
+    console.log('Connected to server');
+});
+
+socket.on('autossh_tunnel_output', function(data) {
+    if (data.tunnel_id === currentLogsTunnelId) {
+        addLogLine(data.data);
+    }
+});
+
+function loadTunnels() {
+    fetch('/api/autossh/tunnels')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                tunnels = {};
+                data.tunnels.forEach(tunnel => {
+                    tunnels[tunnel.tunnel_id] = tunnel;
+                });
+                renderTunnels();
+            } else {
+                console.error('Error loading tunnels:', data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error loading tunnels:', error);
+        });
+}
+
+function renderTunnels() {
+    const container = document.getElementById('tunnels-container');
+    container.innerHTML = '';
+    
+    if (Object.keys(tunnels).length === 0) {
+        container.innerHTML = '<div class="alert alert-info">No tunnels configured. Click "Add New Tunnel" to create one.</div>';
+        return;
+    }
+    
+    Object.values(tunnels).forEach(tunnel => {
+        const card = createTunnelCard(tunnel);
+        container.appendChild(card);
+    });
+}
+
+function createTunnelCard(tunnel) {
+    const card = document.createElement('div');
+    card.className = 'card mb-3';
+    card.setAttribute('data-tunnel-id', tunnel.tunnel_id);
+    
+    const statusBadges = [];
+    if (tunnel.is_running) {
+        statusBadges.push('<span class="badge bg-success">Running</span>');
+    } else {
+        statusBadges.push('<span class="badge bg-secondary">Stopped</span>');
+    }
+    if (tunnel.status === 'error') {
+        statusBadges.push('<span class="badge bg-danger">Error</span>');
+    }
+    
+    const remotePort = tunnel.remote_port || tunnel.local_port;
+    
+    card.innerHTML = `
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <div>
+                <h5 class="mb-0">${escapeHtml(tunnel.name)}</h5>
+                <div class="mt-1">
+                    ${statusBadges.join(' ')}
+                    ${tunnel.last_started ? `<small class="text-muted ms-2">Started: ${new Date(tunnel.last_started).toLocaleString()}</small>` : ''}
+                </div>
+            </div>
+            <div>
+                <button class="btn btn-sm btn-outline-primary me-1 tunnel-edit-btn" data-tunnel-id="${escapeHtml(tunnel.tunnel_id)}" title="Edit" data-requires-edit ${tunnel.is_running ? 'disabled' : ''}>
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-danger tunnel-delete-btn" data-tunnel-id="${escapeHtml(tunnel.tunnel_id)}" title="Delete" data-requires-edit ${tunnel.is_running ? 'disabled' : ''}>
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="row mb-2">
+                <div class="col-md-6">
+                    <strong>Local Port:</strong> ${escapeHtml(tunnel.local_port)}
+                </div>
+                <div class="col-md-6">
+                    <strong>Remote Port:</strong> ${escapeHtml(remotePort)}
+                </div>
+            </div>
+            <div class="row mb-2">
+                <div class="col-md-6">
+                    <strong>VPS Server:</strong> ${escapeHtml(tunnel.vps_ip)}:${escapeHtml(tunnel.vps_port)}
+                </div>
+                <div class="col-md-6">
+                    <strong>Username:</strong> ${escapeHtml(tunnel.username)}
+                </div>
+            </div>
+            <div class="row mb-2">
+                <div class="col-md-6">
+                    <strong>Remote Bind:</strong> ${escapeHtml(tunnel.remote_bind_address)}
+                </div>
+                <div class="col-md-6">
+                    <strong>Keepalive:</strong> Interval ${escapeHtml(tunnel.server_alive_interval)}s, Max ${escapeHtml(tunnel.server_alive_count_max)}
+                </div>
+            </div>
+            <div class="mt-3">
+                ${tunnel.is_running ? 
+                    `<button class="btn btn-sm btn-warning me-2 tunnel-stop-btn" data-tunnel-id="${escapeHtml(tunnel.tunnel_id)}" data-requires-edit>
+                        <i class="fas fa-stop me-1"></i>Stop
+                    </button>` :
+                    `<button class="btn btn-sm btn-success me-2 tunnel-start-btn" data-tunnel-id="${escapeHtml(tunnel.tunnel_id)}" data-requires-edit>
+                        <i class="fas fa-play me-1"></i>Start
+                    </button>`
+                }
+                <button class="btn btn-sm btn-info tunnel-logs-btn" data-tunnel-id="${escapeHtml(tunnel.tunnel_id)}">
+                    <i class="fas fa-terminal me-1"></i>View Logs
+                </button>
+            </div>
+        </div>
+    `;
+    
+    // Add event listeners to buttons
+    const editBtn = card.querySelector('.tunnel-edit-btn');
+    if (editBtn) {
+        editBtn.addEventListener('click', function() {
+            editTunnel(tunnel.tunnel_id);
+        });
+    }
+    
+    const deleteBtn = card.querySelector('.tunnel-delete-btn');
+    if (deleteBtn) {
+        deleteBtn.addEventListener('click', function() {
+            deleteTunnel(tunnel.tunnel_id);
+        });
+    }
+    
+    const startBtn = card.querySelector('.tunnel-start-btn');
+    if (startBtn) {
+        startBtn.addEventListener('click', function() {
+            startTunnel(tunnel.tunnel_id);
+        });
+    }
+    
+    const stopBtn = card.querySelector('.tunnel-stop-btn');
+    if (stopBtn) {
+        stopBtn.addEventListener('click', function() {
+            stopTunnel(tunnel.tunnel_id);
+        });
+    }
+    
+    const logsBtn = card.querySelector('.tunnel-logs-btn');
+    if (logsBtn) {
+        logsBtn.addEventListener('click', function() {
+            showLogs(tunnel.tunnel_id);
+        });
+    }
+    
+    return card;
+}
+
+function showAddTunnelModal() {
+    document.getElementById('tunnelId').value = '';
+    document.getElementById('tunnelName').value = '';
+    document.getElementById('localPort').value = '11434';
+    document.getElementById('remotePort').value = '';
+    document.getElementById('vpsIp').value = '';
+    document.getElementById('vpsPort').value = '22';
+    document.getElementById('username').value = 'root';
+    document.getElementById('sshKeyPath').value = '~/.ssh/id_rsa';
+    document.getElementById('remoteBindAddress').value = '0.0.0.0';
+    document.getElementById('serverAliveInterval').value = '30';
+    document.getElementById('serverAliveCountMax').value = '3';
+    document.getElementById('monitorPort').value = '0';
+    document.getElementById('tunnelModalLabel').textContent = 'Add Autossh Tunnel';
+    
+    const modal = new bootstrap.Modal(document.getElementById('tunnelModal'));
+    modal.show();
+}
+
+function editTunnel(tunnelId) {
+    const tunnel = tunnels[tunnelId];
+    if (!tunnel) {
+        alert('Tunnel not found');
+        return;
+    }
+    
+    if (tunnel.is_running) {
+        alert('Cannot edit tunnel while it is running. Please stop it first.');
+        return;
+    }
+    
+    document.getElementById('tunnelId').value = tunnel.tunnel_id;
+    document.getElementById('tunnelName').value = tunnel.name;
+    document.getElementById('localPort').value = tunnel.local_port;
+    document.getElementById('remotePort').value = tunnel.remote_port || '';
+    document.getElementById('vpsIp').value = tunnel.vps_ip;
+    document.getElementById('vpsPort').value = tunnel.vps_port;
+    document.getElementById('username').value = tunnel.username;
+    document.getElementById('sshKeyPath').value = tunnel.ssh_key_path || '~/.ssh/id_rsa';
+    document.getElementById('remoteBindAddress').value = tunnel.remote_bind_address;
+    document.getElementById('serverAliveInterval').value = tunnel.server_alive_interval;
+    document.getElementById('serverAliveCountMax').value = tunnel.server_alive_count_max;
+    document.getElementById('monitorPort').value = tunnel.monitor_port;
+    document.getElementById('tunnelModalLabel').textContent = 'Edit Autossh Tunnel';
+    
+    const modal = new bootstrap.Modal(document.getElementById('tunnelModal'));
+    modal.show();
+}
+
+function saveTunnel() {
+    const form = document.getElementById('tunnelForm');
+    const formData = new FormData(form);
+    const data = {};
+    formData.forEach((value, key) => {
+        if (key === 'ssh_key_path') {
+            if (value && value.trim() !== '') {
+                data[key] = value.trim();
+            }
+        } else {
+            data[key] = value;
+        }
+    });
+    
+    const tunnelId = document.getElementById('tunnelId').value;
+    const url = tunnelId ? `/api/autossh/tunnels/${tunnelId}` : '/api/autossh/tunnels';
+    const method = tunnelId ? 'PUT' : 'POST';
+    
+    fetch(url, {
+        method: method,
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            bootstrap.Modal.getInstance(document.getElementById('tunnelModal')).hide();
+            loadTunnels();
+        } else {
+            alert('Error: ' + (data.error || 'Failed to save tunnel'));
+        }
+    })
+    .catch(error => {
+        console.error('Error saving tunnel:', error);
+        alert('Error saving tunnel: ' + error.message);
+    });
+}
+
+function deleteTunnel(tunnelId) {
+    if (!confirm('Are you sure you want to delete this tunnel?')) {
+        return;
+    }
+    
+    fetch(`/api/autossh/tunnels/${tunnelId}`, {
+        method: 'DELETE'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            loadTunnels();
+        } else {
+            alert('Error: ' + (data.error || 'Failed to delete tunnel'));
+        }
+    })
+    .catch(error => {
+        console.error('Error deleting tunnel:', error);
+        alert('Error deleting tunnel: ' + error.message);
+    });
+}
+
+function startTunnel(tunnelId) {
+    fetch(`/api/autossh/tunnels/${tunnelId}/start`, {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            loadTunnels();
+        } else {
+            alert('Error: ' + (data.error || 'Failed to start tunnel'));
+        }
+    })
+    .catch(error => {
+        console.error('Error starting tunnel:', error);
+        alert('Error starting tunnel: ' + error.message);
+    });
+}
+
+function stopTunnel(tunnelId) {
+    fetch(`/api/autossh/tunnels/${tunnelId}/stop`, {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            loadTunnels();
+        } else {
+            alert('Error: ' + (data.error || 'Failed to stop tunnel'));
+        }
+    })
+    .catch(error => {
+        console.error('Error stopping tunnel:', error);
+        alert('Error stopping tunnel: ' + error.message);
+    });
+}
+
+function showLogs(tunnelId) {
+    currentLogsTunnelId = tunnelId;
+    const tunnel = tunnels[tunnelId];
+    
+    document.getElementById('logsTunnelStatus').textContent = `Status: ${tunnel.status}`;
+    document.getElementById('logsModalLabel').textContent = `Logs - ${tunnel.name}`;
+    document.getElementById('logsContent').innerHTML = '<div class="text-muted">Loading logs...</div>';
+    
+    // Subscribe to real-time logs
+    socket.emit('subscribe_autossh_tunnel', { tunnel_id: tunnelId });
+    
+    // Load existing logs
+    fetch(`/api/autossh/tunnels/${tunnelId}/logs?limit=30`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                renderLogs(data.logs);
+            }
+        })
+        .catch(error => {
+            console.error('Error loading logs:', error);
+            document.getElementById('logsContent').innerHTML = '<div class="text-danger">Error loading logs</div>';
+        });
+    
+    // Refresh logs every 2 seconds
+    logsInterval = setInterval(() => {
+        fetch(`/api/autossh/tunnels/${tunnelId}/logs?limit=30`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    renderLogs(data.logs);
+                }
+            })
+            .catch(error => {
+                console.error('Error loading logs:', error);
+            });
+    }, 2000);
+    
+    const modal = new bootstrap.Modal(document.getElementById('logsModal'));
+    modal.show();
+    
+    // Unsubscribe when modal is closed
+    document.getElementById('logsModal').addEventListener('hidden.bs.modal', function() {
+        socket.emit('unsubscribe_autossh_tunnel', { tunnel_id: tunnelId });
+        currentLogsTunnelId = null;
+        if (logsInterval) {
+            clearInterval(logsInterval);
+            logsInterval = null;
+        }
+    }, { once: true });
+}
+
+function renderLogs(logs) {
+    const logsDiv = document.getElementById('logsContent');
+    
+    // Combine output and error logs, sort by timestamp
+    const allLogs = [
+        ...(logs.output || []),
+        ...(logs.error || [])
+    ].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    
+    if (allLogs.length === 0) {
+        logsDiv.innerHTML = '<div class="text-muted">No logs available</div>';
+        return;
+    }
+    
+    logsDiv.innerHTML = '';
+    allLogs.forEach(log => {
+        const line = document.createElement('div');
+        line.style.marginBottom = '5px';
+        const timestamp = new Date(log.timestamp).toLocaleString();
+        const color = log.type === 'error' ? '#f48771' : '#4ec9b0';
+        line.innerHTML = `<span style="color: #888;">[${timestamp}]</span> <span style="color: ${color};">${escapeHtml(log.message)}</span>`;
+        logsDiv.appendChild(line);
+    });
+    
+    // Auto-scroll to bottom
+    logsDiv.scrollTop = logsDiv.scrollHeight;
+}
+
+function addLogLine(data) {
+    const logsDiv = document.getElementById('logsContent');
+    
+    // Remove "Loading logs..." message if present
+    if (logsDiv.children.length === 1 && logsDiv.children[0].classList.contains('text-muted')) {
+        logsDiv.innerHTML = '';
+    }
+    
+    const line = document.createElement('div');
+    line.style.marginBottom = '5px';
+    const timestamp = new Date(data.timestamp).toLocaleString();
+    const color = data.type === 'error' ? '#f48771' : '#4ec9b0';
+    line.innerHTML = `<span style="color: #888;">[${timestamp}]</span> <span style="color: ${color};">${escapeHtml(data.message)}</span>`;
+    
+    logsDiv.appendChild(line);
+    
+    // Keep only last 30 lines
+    while (logsDiv.children.length > 30) {
+        logsDiv.removeChild(logsDiv.firstChild);
+    }
+    
+    // Auto-scroll to bottom
+    logsDiv.scrollTop = logsDiv.scrollHeight;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function loadSshConnections() {
+    fetch('/api/autossh/ssh-connections')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                renderSshConnections(data.connections);
+            } else {
+                document.getElementById('ssh-connections-container').innerHTML = 
+                    '<div class="alert alert-danger">Error loading SSH connections: ' + (data.error || 'Unknown error') + '</div>';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading SSH connections:', error);
+            document.getElementById('ssh-connections-container').innerHTML = 
+                '<div class="alert alert-danger">Error loading SSH connections: ' + error.message + '</div>';
+        });
+}
+
+function renderSshConnections(connections) {
+    const container = document.getElementById('ssh-connections-container');
+    
+    if (connections.length === 0) {
+        container.innerHTML = '<div class="alert alert-info">No active SSH connections found.</div>';
+        return;
+    }
+    
+    let html = `
+        <div class="table-responsive">
+            <table class="table table-sm table-hover">
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>Process</th>
+                        <th>PID</th>
+                        <th>Local Address</th>
+                        <th>Remote Address</th>
+                        <th>Status</th>
+                        <th>Command</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    connections.forEach(conn => {
+        const statusClass = conn.status === 'ESTABLISHED' ? 'success' : 
+                          conn.status === 'LISTEN' ? 'info' : 
+                          conn.status === 'TIME_WAIT' ? 'warning' : 'secondary';
+        
+        // Truncate long command lines
+        let cmdline = conn.cmdline || 'N/A';
+        if (cmdline.length > 100) {
+            cmdline = cmdline.substring(0, 100) + '...';
+        }
+        
+        // Only show kill button if PID is valid
+        const pid = conn.pid;
+        // Check if PID is valid (can be number or numeric string)
+        const isValidPid = pid && pid !== 'N/A' && pid !== 'Unknown' && !isNaN(Number(pid));
+        const killButton = isValidPid ? 
+            `<button class="btn btn-sm btn-danger" onclick="killSshConnection(${pid})" data-requires-edit title="Kill this process">
+                <i class="fas fa-times"></i> Kill
+            </button>` : 
+            '<span class="text-muted">N/A</span>';
+        
+        html += `
+            <tr>
+                <td><span class="badge bg-primary">${escapeHtml(conn.connection_type)}</span></td>
+                <td>${escapeHtml(conn.process_name)}</td>
+                <td>${escapeHtml(pid)}</td>
+                <td><code>${escapeHtml(conn.local_address)}</code></td>
+                <td><code>${escapeHtml(conn.remote_address)}</code></td>
+                <td><span class="badge bg-${statusClass}">${escapeHtml(conn.status)}</span></td>
+                <td><small class="text-muted" title="${escapeHtml(conn.cmdline)}">${escapeHtml(cmdline)}</small></td>
+                <td>${killButton}</td>
+            </tr>
+        `;
+    });
+    
+    html += `
+                </tbody>
+            </table>
+        </div>
+        <div class="mt-2">
+            <small class="text-muted">Total: ${connections.length} SSH connection(s)</small>
+        </div>
+    `;
+    
+    container.innerHTML = html;
+}
+
+function killSshConnection(pid) {
+    if (!confirm(`Are you sure you want to kill process ${pid}? This action cannot be undone.`)) {
+        return;
+    }
+    
+    fetch(`/api/autossh/ssh-connections/${pid}/kill`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        credentials: 'same-origin'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(`Process ${pid} killed successfully.`);
+            loadSshConnections();
+            loadKillLog();
+        } else {
+            alert(`Error killing process: ${data.error || 'Unknown error'}`);
+        }
+    })
+    .catch(error => {
+        console.error('Error killing SSH connection:', error);
+        alert(`Error killing process: ${error.message}`);
+    });
+}
+
+function loadKillLog() {
+    fetch('/api/autossh/ssh-connections/kill-log', {
+        credentials: 'same-origin'
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                renderKillLog(data.log);
+            } else {
+                console.error('Error loading kill log:', data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error loading kill log:', error);
+        });
+}
+
+function renderKillLog(log) {
+    const container = document.getElementById('kill-log-container');
+    if (!container) return;
+    
+    if (log.length === 0) {
+        container.innerHTML = '<div class="alert alert-info">No killed connections logged yet.</div>';
+        return;
+    }
+    
+    let html = `
+        <div class="table-responsive">
+            <table class="table table-sm table-hover">
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>PID</th>
+                        <th>Process Name</th>
+                        <th>Command</th>
+                        <th>Username</th>
+                        <th>Killed Gracefully</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    log.forEach(entry => {
+        const gracefulBadge = entry.killed_gracefully ? 
+            '<span class="badge bg-success">Yes</span>' : 
+            '<span class="badge bg-warning">Force Killed</span>';
+        
+        let cmdline = entry.cmdline || 'N/A';
+        if (cmdline.length > 80) {
+            cmdline = cmdline.substring(0, 80) + '...';
+        }
+        
+        html += `
+            <tr>
+                <td>${new Date(entry.timestamp).toLocaleString()}</td>
+                <td>${escapeHtml(entry.pid)}</td>
+                <td>${escapeHtml(entry.process_name)}</td>
+                <td><small class="text-muted" title="${escapeHtml(entry.cmdline)}">${escapeHtml(cmdline)}</small></td>
+                <td>${escapeHtml(entry.username)}</td>
+                <td>${gracefulBadge}</td>
+            </tr>
+        `;
+    });
+    
+    html += `
+                </tbody>
+            </table>
+        </div>
+    `;
+    
+    container.innerHTML = html;
+}
+
+// Load tunnels on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadTunnels();
+    loadSshConnections();
+    loadKillLog();
+    // Refresh every 5 seconds
+    setInterval(loadTunnels, 5000);
+    setInterval(loadSshConnections, 5000);
+    setInterval(loadKillLog, 10000); // Refresh kill log every 10 seconds
+});
+</script>
+{% endblock %}
+

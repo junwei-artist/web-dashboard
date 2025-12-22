@@ -1,0 +1,38 @@
+{
+  "tunnels": {
+    "tunnel_1766368752": {
+      "tunnel_id": "tunnel_1766368752",
+      "name": "tunnel",
+      "local_port": "9200",
+      "remote_port": "9200",
+      "vps_ip": "47.112.191.42",
+      "vps_port": "22",
+      "username": "tunnel",
+      "ssh_key_path": "/Users/lytech/.ssh/id_ed25519",
+      "remote_bind_address": "0.0.0.0",
+      "server_alive_interval": "30",
+      "server_alive_count_max": "3",
+      "monitor_port": "0",
+      "is_running": false,
+      "last_started": null,
+      "status": "stopped"
+    },
+    "tunnel_1766384990": {
+      "tunnel_id": "tunnel_1766384990",
+      "name": "ollama",
+      "local_port": "11435",
+      "remote_port": "11435",
+      "vps_ip": "47.112.191.42",
+      "vps_port": "22",
+      "username": "tunnel",
+      "ssh_key_path": "/Users/lytech/.ssh/id_ed25519",
+      "remote_bind_address": "0.0.0.0",
+      "server_alive_interval": "30",
+      "server_alive_count_max": "3",
+      "monitor_port": "0",
+      "is_running": false,
+      "last_started": null,
+      "status": "stopped"
+    }
+  }
+}

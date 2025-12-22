@@ -39,6 +39,9 @@ class SystemMonitor:
         self._network_connections = {}  # {connection_id: {local_addr, remote_addr, status, process, timestamp}}
         self._connection_history = []  # List of all network connection records
         
+        # SSH kill log
+        self._killed_ssh_connections = []  # List of killed SSH connections with timestamp
+        
         # Network interface IP list management
         self._test_ip_list = []  # List of IPs to test
         self._test_url_list = []  # List of URLs to test with curl
@@ -556,6 +559,268 @@ class SystemMonitor:
         """Reset warning flags to allow logging again (useful for debugging)."""
         self._psutil_access_warned = False
         self._fallback_error_logged = False
+    
+    def get_ssh_connections(self) -> List[Dict[str, Any]]:
+        """Get all active SSH connections using ps aux | grep ssh | grep -v grep."""
+        try:
+            ssh_connections = []
+            
+            # Use ps aux | grep ssh | grep -v grep to get all SSH processes
+            try:
+                # Run the command: ps aux | grep ssh | grep -v grep
+                ps_process = subprocess.Popen(
+                    ['ps', 'aux'],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE
+                )
+                grep_process = subprocess.Popen(
+                    ['grep', 'ssh'],
+                    stdin=ps_process.stdout,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE
+                )
+                grep_v_process = subprocess.Popen(
+                    ['grep', '-v', 'grep'],
+                    stdin=grep_process.stdout,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE
+                )
+                
+                # Close stdout in ps_process to allow it to receive a SIGPIPE if grep exits
+                ps_process.stdout.close()
+                grep_process.stdout.close()
+                
+                # Get output
+                stdout, stderr = grep_v_process.communicate(timeout=10)
+                
+                if grep_v_process.returncode == 0 and stdout:
+                    # Parse each line from ps aux output
+                    for line in stdout.decode('utf-8', errors='ignore').split('\n'):
+                        line = line.strip()
+                        if not line:
+                            continue
+                        
+                        # Parse ps aux output format:
+                        # USER PID %CPU %MEM VSZ RSS TTY STAT START TIME COMMAND
+                        parts = line.split(None, 10)  # Split into max 11 parts (last part is command)
+                        if len(parts) < 11:
+                            continue
+                        
+                        try:
+                            user = parts[0]
+                            pid = int(parts[1])
+                            cpu = parts[2]
+                            mem = parts[3]
+                            vsz = parts[4]
+                            rss = parts[5]
+                            tty = parts[6]
+                            stat = parts[7]
+                            start = parts[8]
+                            time_used = parts[9]
+                            cmdline = parts[10] if len(parts) > 10 else ''
+                            
+                            # Determine connection type based on command
+                            connection_type = "SSH Process"
+                            process_name = "ssh"
+                            
+                            if 'sshd' in cmdline.lower():
+                                connection_type = "SSH Server (sshd)"
+                                process_name = "sshd"
+                            elif 'autossh' in cmdline.lower():
+                                connection_type = "Autossh Tunnel"
+                                process_name = "autossh"
+                            elif 'ssh' in cmdline.lower():
+                                # Try to determine if it's client or server
+                                if '-R' in cmdline or '-L' in cmdline or '-D' in cmdline:
+                                    connection_type = "SSH Tunnel"
+                                elif '@' in cmdline:
+                                    connection_type = "SSH Client"
+                                else:
+                                    connection_type = "SSH Process"
+                                process_name = "ssh"
+                            
+                            # Try to extract connection details from command line
+                            local_address = "N/A"
+                            remote_address = "N/A"
+                            local_port = None
+                            remote_port = None
+                            
+                            # Parse SSH command line for connection info
+                            # Examples:
+                            # ssh -R 0.0.0.0:11434:127.0.0.1:11434 root@47.112.191.42
+                            # ssh user@host
+                            # sshd listening on port 22
+                            
+                            import re
+                            
+                            # Extract remote host from command (user@host)
+                            host_match = re.search(r'([a-zA-Z0-9_-]+@)?([a-zA-Z0-9._-]+)', cmdline)
+                            if host_match:
+                                remote_address = host_match.group(2)
+                            
+                            # Extract port forwarding info (-R or -L)
+                            # -R remote_bind:remote_port:local_host:local_port
+                            # -L local_port:remote_host:remote_port
+                            reverse_match = re.search(r'-R\s+([0-9.]+):(\d+):([0-9.]+):(\d+)', cmdline)
+                            if reverse_match:
+                                remote_bind = reverse_match.group(1)
+                                remote_port = int(reverse_match.group(2))
+                                local_host = reverse_match.group(3)
+                                local_port = int(reverse_match.group(4))
+                                local_address = f"{local_host}:{local_port}"
+                                remote_address = f"{remote_bind}:{remote_port}"
+                                connection_type = "SSH Reverse Tunnel"
+                            
+                            forward_match = re.search(r'-L\s+(\d+):([0-9.]+):(\d+)', cmdline)
+                            if forward_match:
+                                local_port = int(forward_match.group(1))
+                                remote_host = forward_match.group(2)
+                                remote_port = int(forward_match.group(3))
+                                local_address = f"127.0.0.1:{local_port}"
+                                remote_address = f"{remote_host}:{remote_port}"
+                                connection_type = "SSH Forward Tunnel"
+                            
+                            # Extract port from -p option
+                            port_match = re.search(r'-p\s+(\d+)', cmdline)
+                            if port_match:
+                                remote_port = int(port_match.group(1))
+                            
+                            # Check if it's a listening sshd
+                            if 'sshd' in cmdline.lower() and ('-D' in cmdline or 'LISTEN' in stat):
+                                connection_type = "SSH Server (Listening)"
+                                local_address = "0.0.0.0:22"
+                                local_port = 22
+                            
+                            ssh_connections.append({
+                                'pid': pid,
+                                'process_name': process_name,
+                                'cmdline': cmdline,
+                                'user': user,
+                                'cpu': cpu,
+                                'mem': mem,
+                                'stat': stat,
+                                'local_address': local_address,
+                                'remote_address': remote_address,
+                                'local_port': local_port,
+                                'remote_port': remote_port,
+                                'status': stat,
+                                'connection_type': connection_type,
+                                'timestamp': datetime.now().isoformat()
+                            })
+                        except (ValueError, IndexError) as e:
+                            logger.debug(f"Error parsing ps aux line: {line}, error: {e}")
+                            continue
+                
+                elif grep_v_process.returncode == 1:
+                    # No SSH processes found (grep returns 1 when no matches)
+                    logger.debug("No SSH processes found")
+                else:
+                    logger.warning(f"Error running ps aux | grep ssh: {stderr.decode('utf-8', errors='ignore')}")
+                    
+            except subprocess.TimeoutExpired:
+                logger.error("Timeout while getting SSH connections")
+            except Exception as e:
+                logger.error(f"Error getting SSH connections via ps aux: {e}")
+            
+            # Sort by PID (process ID)
+            ssh_connections.sort(key=lambda x: x.get('pid', 0))
+            
+            return ssh_connections
+            
+        except Exception as e:
+            logger.error(f"Error getting SSH connections: {e}")
+            return []
+    
+    def kill_ssh_connection(self, pid: int) -> Dict[str, Any]:
+        """Kill an SSH connection by PID and log it."""
+        try:
+            # Get process info before killing
+            process_info = None
+            try:
+                process = psutil.Process(pid)
+                process_info = {
+                    'pid': pid,
+                    'name': process.name(),
+                    'cmdline': ' '.join(process.cmdline()) if process.cmdline() else 'N/A',
+                    'username': process.username(),
+                    'status': process.status(),
+                    'create_time': datetime.fromtimestamp(process.create_time()).isoformat()
+                }
+            except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
+                return {
+                    'success': False,
+                    'error': f'Process {pid} not found or access denied: {str(e)}'
+                }
+            
+            # Try to kill the process
+            try:
+                process = psutil.Process(pid)
+                process.terminate()  # Try graceful termination first
+                
+                # Wait a bit for process to terminate
+                try:
+                    process.wait(timeout=3)
+                    killed_gracefully = True
+                except psutil.TimeoutExpired:
+                    # Process didn't terminate, force kill
+                    process.kill()
+                    process.wait(timeout=2)
+                    killed_gracefully = False
+                
+                # Log the kill
+                kill_log_entry = {
+                    'timestamp': datetime.now().isoformat(),
+                    'pid': pid,
+                    'process_name': process_info['name'],
+                    'cmdline': process_info['cmdline'],
+                    'username': process_info['username'],
+                    'killed_gracefully': killed_gracefully,
+                    'status_before_kill': process_info['status']
+                }
+                
+                self._killed_ssh_connections.append(kill_log_entry)
+                
+                # Keep only last 100 entries
+                if len(self._killed_ssh_connections) > 100:
+                    self._killed_ssh_connections = self._killed_ssh_connections[-100:]
+                
+                logger.info(f"Killed SSH process {pid} ({process_info['name']}): {process_info['cmdline']}")
+                
+                return {
+                    'success': True,
+                    'message': f'Process {pid} ({process_info["name"]}) killed successfully',
+                    'killed_gracefully': killed_gracefully,
+                    'process_info': process_info
+                }
+                
+            except psutil.NoSuchProcess:
+                return {
+                    'success': False,
+                    'error': f'Process {pid} does not exist'
+                }
+            except psutil.AccessDenied:
+                return {
+                    'success': False,
+                    'error': f'Access denied: Cannot kill process {pid} (may require root privileges)'
+                }
+            except Exception as e:
+                logger.error(f"Error killing process {pid}: {e}")
+                return {
+                    'success': False,
+                    'error': f'Error killing process: {str(e)}'
+                }
+                
+        except Exception as e:
+            logger.error(f"Error in kill_ssh_connection: {e}")
+            return {
+                'success': False,
+                'error': f'Unexpected error: {str(e)}'
+            }
+    
+    def get_killed_ssh_connections_log(self) -> List[Dict[str, Any]]:
+        """Get the log of killed SSH connections."""
+        # Return in reverse chronological order (most recent first)
+        return list(reversed(self._killed_ssh_connections))
     
     def get_all_port_labels(self) -> Dict[str, str]:
         """Get all current port labels."""

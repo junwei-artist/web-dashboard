@@ -1,0 +1,1836 @@
+{% extends "base.html" %}
+
+{% block title %}Ollama Gateway - System Monitor{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">
+            <i class="fas fa-server me-2"></i>Ollama Gateway Service
+            <small class="text-muted">Manage API keys, tokens, and request queue</small>
+        </h1>
+    </div>
+</div>
+
+<!-- Overview Cards -->
+<div class="row mb-4">
+    <div class="col-md-3 mb-3">
+        <div class="card metric-card card-hover">
+            <div class="card-body text-center">
+                <i class="fas fa-key fa-2x mb-2"></i>
+                <h5>Total API Keys</h5>
+                <h3 id="total-api-keys">--</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card metric-card card-hover">
+            <div class="card-body text-center">
+                <i class="fas fa-check-circle fa-2x mb-2"></i>
+                <h5>Active Keys</h5>
+                <h3 id="active-api-keys">--</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card metric-card card-hover">
+            <div class="card-body text-center">
+                <i class="fas fa-list fa-2x mb-2"></i>
+                <h5>Queue Length</h5>
+                <h3 id="queue-length">--</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card metric-card card-hover">
+            <div class="card-body text-center">
+                <i class="fas fa-chart-line fa-2x mb-2"></i>
+                <h5>Requests Today</h5>
+                <h3 id="requests-today">--</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tab Navigation -->
+<div class="row mb-4">
+    <div class="col-12">
+        <ul class="nav nav-tabs" id="ollamaTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="api-keys-tab" data-bs-toggle="tab" data-bs-target="#api-keys" type="button" role="tab">
+                    <i class="fas fa-key me-1"></i>API Keys
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="statistics-tab" data-bs-toggle="tab" data-bs-target="#statistics" type="button" role="tab">
+                    <i class="fas fa-chart-bar me-1"></i>Statistics
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="tasks-tab" data-bs-toggle="tab" data-bs-target="#tasks" type="button" role="tab">
+                    <i class="fas fa-tasks me-1"></i>Gateway Configurations
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="queue-tab" data-bs-toggle="tab" data-bs-target="#queue" type="button" role="tab">
+                    <i class="fas fa-list-alt me-1"></i>Queue Status
+                </button>
+            </li>
+        </ul>
+    </div>
+</div>
+
+<!-- Tab Content -->
+<div class="tab-content" id="ollamaTabsContent">
+    <!-- API Keys Tab -->
+    <div class="tab-pane fade" id="api-keys" role="tabpanel">
+        <div class="row mb-3">
+            <div class="col-12">
+                <button class="btn btn-primary" onclick="showCreateApiKeyModal()" data-requires-edit>
+                    <i class="fas fa-plus me-1"></i>Create API Key
+                </button>
+                <button class="btn btn-secondary ms-2" onclick="refreshApiKeys()">
+                    <i class="fas fa-sync-alt me-1"></i>Refresh
+                </button>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-body">
+                <div id="api-keys-list">
+                    <i class="fas fa-spinner fa-spin"></i> Loading API keys...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Tab -->
+    <div class="tab-pane fade" id="statistics" role="tabpanel">
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <label class="form-label">Select API Key (or leave empty for aggregate):</label>
+                <select class="form-select" id="statistics-api-key-select" onchange="loadStatistics()">
+                    <option value="">All Keys (Aggregate)</option>
+                </select>
+            </div>
+            <div class="col-md-6">
+                <button class="btn btn-secondary mt-4" onclick="loadStatistics()">
+                    <i class="fas fa-sync-alt me-1"></i>Refresh Statistics
+                </button>
+            </div>
+        </div>
+        <div id="statistics-content">
+            <i class="fas fa-spinner fa-spin"></i> Loading statistics...
+        </div>
+    </div>
+
+
+    <!-- Queue Status Tab -->
+    <div class="tab-pane fade" id="queue" role="tabpanel">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Queue Status</h5>
+                <button class="btn btn-sm btn-secondary float-end" onclick="refreshQueueStatus()">
+                    <i class="fas fa-sync-alt me-1"></i>Refresh
+                </button>
+            </div>
+            <div class="card-body">
+                <div id="queue-status-content">
+                    <i class="fas fa-spinner fa-spin"></i> Loading queue status...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tasks Tab (Gateway Configurations) -->
+    <div class="tab-pane fade show active" id="tasks" role="tabpanel">
+        <div class="row mb-3">
+            <div class="col-12">
+                <button class="btn btn-primary" onclick="showCreateTaskModal()" data-requires-edit>
+                    <i class="fas fa-plus me-1"></i>Create Gateway Configuration
+                </button>
+                <button class="btn btn-secondary ms-2" onclick="refreshTasks()">
+                    <i class="fas fa-sync-alt me-1"></i>Refresh
+                </button>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-body">
+                <div id="tasks-list">
+                    <i class="fas fa-spinner fa-spin"></i> Loading gateway configurations...
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create API Key Modal -->
+<div class="modal fade" id="createApiKeyModal" tabindex="-1" aria-labelledby="createApiKeyModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="createApiKeyModalLabel">Create API Key</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="apiKeyForm">
+                    <div class="mb-3">
+                        <label for="apiKeyName" class="form-label">Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="apiKeyName" name="name" required>
+                        <small class="form-text text-muted">A descriptive name for this API key</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="apiKeyDescription" class="form-label">Description</label>
+                        <textarea class="form-control" id="apiKeyDescription" name="description" rows="3"></textarea>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="apiKeyRateLimit" class="form-label">Rate Limit (requests/minute)</label>
+                            <input type="number" class="form-control" id="apiKeyRateLimit" name="rate_limit" placeholder="Leave empty for default">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="apiKeyTokenLimit" class="form-label">Token Limit (tokens/day)</label>
+                            <input type="number" class="form-control" id="apiKeyTokenLimit" name="token_limit" placeholder="Leave empty for default">
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="createApiKey()">Create API Key</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- API Key Details Modal -->
+<div class="modal fade" id="apiKeyDetailsModal" tabindex="-1" aria-labelledby="apiKeyDetailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="apiKeyDetailsModalLabel">API Key Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-1"></i>
+                    <strong>Important:</strong> Copy this API key now. You won't be able to see it again!
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">API Key:</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="displayApiKey" readonly>
+                        <button class="btn btn-outline-secondary" type="button" onclick="copyApiKey()">
+                            <i class="fas fa-copy"></i> Copy
+                        </button>
+                    </div>
+                </div>
+                <div id="apiKeyDetailsContent">
+                    <!-- Details will be loaded here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit API Key Modal -->
+<div class="modal fade" id="editApiKeyModal" tabindex="-1" aria-labelledby="editApiKeyModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editApiKeyModalLabel">Edit API Key</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editApiKeyForm">
+                    <input type="hidden" id="editApiKeyFullKey" name="api_key">
+                    <div class="mb-3">
+                        <label for="editApiKeyName" class="form-label">Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="editApiKeyName" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editApiKeyDescription" class="form-label">Description</label>
+                        <textarea class="form-control" id="editApiKeyDescription" name="description" rows="3"></textarea>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="editApiKeyRateLimit" class="form-label">Rate Limit (requests/minute)</label>
+                            <input type="number" class="form-control" id="editApiKeyRateLimit" name="rate_limit" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="editApiKeyTokenLimit" class="form-label">Token Limit (tokens/day)</label>
+                            <input type="number" class="form-control" id="editApiKeyTokenLimit" name="token_limit" required>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="updateApiKey()">Update API Key</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create Task Modal -->
+<div class="modal fade" id="createTaskModal" tabindex="-1" aria-labelledby="createTaskModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="createTaskModalLabel">Create Gateway Configuration</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="taskForm">
+                    <div class="mb-3">
+                        <label for="taskName" class="form-label">Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="taskName" name="name" required>
+                        <small class="form-text text-muted">A descriptive name for this gateway configuration</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="taskDescription" class="form-label">Description</label>
+                        <textarea class="form-control" id="taskDescription" name="description" rows="2"></textarea>
+                    </div>
+                    <hr>
+                    <h6>Gateway Mode</h6>
+                    <div class="mb-3">
+                        <label for="taskMode" class="form-label">Request Processing Mode <span class="text-danger">*</span></label>
+                        <select class="form-control" id="taskMode" name="mode" required onchange="toggleRedisFields()">
+                            <option value="redis">Redis Queue (Queued Processing)</option>
+                            <option value="direct">Direct (Forward Immediately)</option>
+                        </select>
+                        <small class="form-text text-muted">
+                            <strong>Redis Queue:</strong> Requests are queued in Redis and processed by worker threads<br>
+                            <strong>Direct:</strong> Requests are forwarded immediately to Ollama (no Redis required)
+                        </small>
+                    </div>
+                    <hr>
+                    <h6>Ollama Configuration</h6>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="taskOllamaUrl" class="form-label">Ollama URL <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="taskOllamaUrl" name="ollama_url" placeholder="http://localhost:11434" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="taskGatewayPort" class="form-label">Gateway Port</label>
+                            <input type="number" class="form-control" id="taskGatewayPort" name="gateway_port" placeholder="11435" required>
+                        </div>
+                    </div>
+                    <hr>
+                    <h6 id="redisConfigHeader">Redis Configuration</h6>
+                    <div id="redisConfigSection">
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="taskRedisHost" class="form-label">Redis Host <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="taskRedisHost" name="redis_host" placeholder="localhost" required>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="taskRedisPort" class="form-label">Redis Port <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" id="taskRedisPort" name="redis_port" placeholder="6379" required>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="taskRedisDb" class="form-label">Redis DB <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" id="taskRedisDb" name="redis_db" placeholder="0" required>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="taskRedisPassword" class="form-label">Redis Password (optional)</label>
+                            <input type="password" class="form-control" id="taskRedisPassword" name="redis_password" placeholder="Leave empty if no password">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="taskMaxQueueSize" class="form-label">Max Queue Size <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" id="taskMaxQueueSize" name="max_queue_size" placeholder="1000" required>
+                        </div>
+                    </div>
+                    </div>
+                    <hr>
+                    <h6>Default Limits</h6>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="taskDefaultRateLimit" class="form-label">Default Rate Limit (requests/minute) <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" id="taskDefaultRateLimit" name="default_rate_limit" placeholder="100" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="taskDefaultTokenLimit" class="form-label">Default Token Limit (tokens/day) <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" id="taskDefaultTokenLimit" name="default_token_limit" placeholder="1000000" required>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="createTask()">Create Gateway</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- API Examples Modal -->
+<div class="modal fade" id="apiExamplesModal" tabindex="-1" aria-labelledby="apiExamplesModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="apiExamplesModalLabel">API Usage Examples</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="api-examples-content">
+                    <i class="fas fa-spinner fa-spin"></i> Loading API examples...
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Task Monitor Modal -->
+<div class="modal fade" id="taskMonitorModal" tabindex="-1" aria-labelledby="taskMonitorModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="taskMonitorModalLabel">Task Monitor</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <button class="btn btn-sm btn-secondary" onclick="refreshTaskMonitor()">
+                        <i class="fas fa-sync-alt me-1"></i>Refresh
+                    </button>
+                </div>
+                <div id="task-monitor-content">
+                    <i class="fas fa-spinner fa-spin"></i> Loading job history...
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Task Modal -->
+<div class="modal fade" id="editTaskModal" tabindex="-1" aria-labelledby="editTaskModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editTaskModalLabel">Edit Gateway Configuration</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editTaskForm">
+                    <input type="hidden" id="editTaskId" name="task_id">
+                    <div class="mb-3">
+                        <label for="editTaskName" class="form-label">Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="editTaskName" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editTaskDescription" class="form-label">Description</label>
+                        <textarea class="form-control" id="editTaskDescription" name="description" rows="2"></textarea>
+                    </div>
+                    <hr>
+                    <h6>Gateway Mode</h6>
+                    <div class="mb-3">
+                        <label for="editTaskMode" class="form-label">Request Processing Mode <span class="text-danger">*</span></label>
+                        <select class="form-control" id="editTaskMode" name="mode" required onchange="toggleEditRedisFields()">
+                            <option value="redis">Redis Queue (Queued Processing)</option>
+                            <option value="direct">Direct (Forward Immediately)</option>
+                        </select>
+                        <small class="form-text text-muted">
+                            <strong>Redis Queue:</strong> Requests are queued in Redis and processed by worker threads<br>
+                            <strong>Direct:</strong> Requests are forwarded immediately to Ollama (no Redis required)
+                        </small>
+                    </div>
+                    <hr>
+                    <h6>Ollama Configuration</h6>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="editTaskOllamaUrl" class="form-label">Ollama URL <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="editTaskOllamaUrl" name="ollama_url" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="editTaskGatewayPort" class="form-label">Gateway Port</label>
+                            <input type="number" class="form-control" id="editTaskGatewayPort" name="gateway_port" required>
+                        </div>
+                    </div>
+                    <hr>
+                    <h6 id="editRedisConfigHeader">Redis Configuration</h6>
+                    <div id="editRedisConfigSection">
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="editTaskRedisHost" class="form-label">Redis Host <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="editTaskRedisHost" name="redis_host" required>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="editTaskRedisPort" class="form-label">Redis Port <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" id="editTaskRedisPort" name="redis_port" required>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="editTaskRedisDb" class="form-label">Redis DB <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" id="editTaskRedisDb" name="redis_db" required>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="editTaskRedisPassword" class="form-label">Redis Password (optional)</label>
+                            <input type="password" class="form-control" id="editTaskRedisPassword" name="redis_password" placeholder="Leave empty if no password">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="editTaskMaxQueueSize" class="form-label">Max Queue Size <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" id="editTaskMaxQueueSize" name="max_queue_size" required>
+                        </div>
+                    </div>
+                    </div>
+                    <hr>
+                    <h6>Default Limits</h6>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="editTaskDefaultRateLimit" class="form-label">Default Rate Limit (requests/minute) <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" id="editTaskDefaultRateLimit" name="default_rate_limit" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="editTaskDefaultTokenLimit" class="form-label">Default Token Limit (tokens/day) <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" id="editTaskDefaultTokenLimit" name="default_token_limit" required>
+                        </div>
+                    </div>
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-1"></i>
+                        <strong>Note:</strong> You cannot edit a running gateway. Stop it first to make changes.
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="updateTask()">Update Gateway</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentApiKey = null;
+
+// Load initial data
+document.addEventListener('DOMContentLoaded', function() {
+    refreshOverview();
+    refreshApiKeys();
+    loadStatistics();
+    refreshQueueStatus();
+    refreshTasks();
+    
+    // Auto-refresh every 10 seconds
+    setInterval(function() {
+        refreshOverview();
+        refreshQueueStatus();
+        refreshTasks();
+    }, 10000);
+});
+
+function refreshOverview() {
+    Promise.all([
+        fetch('/api/ollama-gateway/statistics').then(r => r.json()),
+        fetch('/api/ollama-gateway/queue/status').then(r => r.json())
+    ]).then(([statsResult, queueResult]) => {
+        if (statsResult.success) {
+            const stats = statsResult.statistics;
+            document.getElementById('total-api-keys').textContent = stats.total_api_keys || 0;
+            document.getElementById('active-api-keys').textContent = stats.active_api_keys || 0;
+            document.getElementById('requests-today').textContent = stats.requests_today || 0;
+        }
+        if (queueResult.success) {
+            document.getElementById('queue-length').textContent = queueResult.status.queue_length || 0;
+        }
+    }).catch(error => {
+        console.error('Error refreshing overview:', error);
+    });
+}
+
+function refreshApiKeys() {
+    fetch('/api/ollama-gateway/api-keys')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayApiKeys(data.api_keys);
+                // Update statistics dropdown
+                const select = document.getElementById('statistics-api-key-select');
+                select.innerHTML = '<option value="">All Keys (Aggregate)</option>';
+                data.api_keys.forEach(key => {
+                    const option = document.createElement('option');
+                    option.value = key.full_key;
+                    option.textContent = `${key.name} (${key.api_key})`;
+                    select.appendChild(option);
+                });
+            } else {
+                showError('api-keys-list', data.error || 'Failed to load API keys');
+            }
+        })
+        .catch(error => {
+            console.error('Error loading API keys:', error);
+            showError('api-keys-list', 'Failed to load API keys');
+        });
+}
+
+function displayApiKeys(keys) {
+    const container = document.getElementById('api-keys-list');
+    if (!keys || keys.length === 0) {
+        container.innerHTML = '<p class="text-muted">No API keys found. Create one to get started.</p>';
+        return;
+    }
+    
+    let html = '<div class="table-responsive"><table class="table table-hover">';
+    html += '<thead><tr><th>Name</th><th>API Key</th><th>Status</th><th>Rate Limit</th><th>Token Limit</th><th>Usage Today</th><th>Last Used</th><th>Actions</th></tr></thead><tbody>';
+    
+    keys.forEach(key => {
+        const statusBadge = key.is_active 
+            ? '<span class="badge bg-success">Active</span>'
+            : '<span class="badge bg-danger">Revoked</span>';
+        const lastUsed = key.last_used 
+            ? new Date(key.last_used).toLocaleString()
+            : 'Never';
+        
+        html += `
+            <tr>
+                <td><strong>${escapeHtml(key.name)}</strong><br><small class="text-muted">${escapeHtml(key.description || '')}</small></td>
+                <td><code>${key.api_key}</code></td>
+                <td>${statusBadge}</td>
+                <td>${key.rate_limit}/min</td>
+                <td>${formatNumber(key.token_limit)}/day</td>
+                <td>${formatNumber(key.tokens_used_today)} tokens<br><small>${key.requests_today} requests</small></td>
+                <td><small>${lastUsed}</small></td>
+                <td>
+                    <button class="btn btn-sm btn-info" onclick="viewApiKeyDetails('${escapeHtml(key.full_key)}')" title="View Details">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    <button class="btn btn-sm btn-primary" onclick="editApiKey('${escapeHtml(key.full_key)}')" data-requires-edit title="Edit">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    ${key.is_active 
+                        ? `<button class="btn btn-sm btn-warning" onclick="revokeApiKey('${escapeHtml(key.full_key)}')" data-requires-edit title="Revoke">
+                            <i class="fas fa-ban"></i>
+                        </button>`
+                        : ''
+                    }
+                    <button class="btn btn-sm btn-danger" onclick="deleteApiKey('${escapeHtml(key.full_key)}')" data-requires-edit title="Delete">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+    
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+}
+
+function showCreateApiKeyModal() {
+    document.getElementById('apiKeyForm').reset();
+    const modal = new bootstrap.Modal(document.getElementById('createApiKeyModal'));
+    modal.show();
+}
+
+function createApiKey() {
+    const form = document.getElementById('apiKeyForm');
+    const formData = new FormData(form);
+    const data = {};
+    formData.forEach((value, key) => {
+        if (value) data[key] = value;
+    });
+    
+    // Convert numeric fields
+    if (data.rate_limit) data.rate_limit = parseInt(data.rate_limit);
+    if (data.token_limit) data.token_limit = parseInt(data.token_limit);
+    
+    fetch('/api/ollama-gateway/api-keys', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            bootstrap.Modal.getInstance(document.getElementById('createApiKeyModal')).hide();
+            showApiKeyDetails(data.api_key, data.key_info);
+            refreshApiKeys();
+            refreshOverview();
+        } else {
+            alert('Error: ' + (data.error || 'Failed to create API key'));
+        }
+    })
+    .catch(error => {
+        console.error('Error creating API key:', error);
+        alert('Error creating API key');
+    });
+}
+
+function showApiKeyDetails(apiKey, keyInfo) {
+    document.getElementById('displayApiKey').value = apiKey;
+    currentApiKey = apiKey;
+    
+    const content = document.getElementById('apiKeyDetailsContent');
+    content.innerHTML = `
+        <div class="row">
+            <div class="col-md-6">
+                <h6>Key Information</h6>
+                <p><strong>Name:</strong> ${escapeHtml(keyInfo.name)}</p>
+                <p><strong>Description:</strong> ${escapeHtml(keyInfo.description || 'N/A')}</p>
+                <p><strong>Created:</strong> ${new Date(keyInfo.created_at).toLocaleString()}</p>
+                <p><strong>Status:</strong> ${keyInfo.is_active ? '<span class="badge bg-success">Active</span>' : '<span class="badge bg-danger">Inactive</span>'}</p>
+            </div>
+            <div class="col-md-6">
+                <h6>Limits</h6>
+                <p><strong>Rate Limit:</strong> ${keyInfo.rate_limit} requests/minute</p>
+                <p><strong>Token Limit:</strong> ${formatNumber(keyInfo.token_limit)} tokens/day</p>
+                <p><strong>Tokens Used Today:</strong> ${formatNumber(keyInfo.tokens_used_today || 0)}</p>
+                <p><strong>Requests Today:</strong> ${keyInfo.requests_today || 0}</p>
+            </div>
+        </div>
+    `;
+    
+    const modal = new bootstrap.Modal(document.getElementById('apiKeyDetailsModal'));
+    modal.show();
+}
+
+function viewApiKeyDetails(apiKey) {
+    fetch('/api/ollama-gateway/api-keys')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const key = data.api_keys.find(k => k.full_key === apiKey);
+                if (key) {
+                    showApiKeyDetails(key.full_key, key);
+                }
+            }
+        });
+}
+
+function copyApiKey() {
+    const input = document.getElementById('displayApiKey');
+    input.select();
+    document.execCommand('copy');
+    alert('API key copied to clipboard!');
+}
+
+function editApiKey(apiKey) {
+    fetch('/api/ollama-gateway/api-keys')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const key = data.api_keys.find(k => k.full_key === apiKey);
+                if (key) {
+                    document.getElementById('editApiKeyFullKey').value = key.full_key;
+                    document.getElementById('editApiKeyName').value = key.name;
+                    document.getElementById('editApiKeyDescription').value = key.description || '';
+                    document.getElementById('editApiKeyRateLimit').value = key.rate_limit;
+                    document.getElementById('editApiKeyTokenLimit').value = key.token_limit;
+                    
+                    const modal = new bootstrap.Modal(document.getElementById('editApiKeyModal'));
+                    modal.show();
+                }
+            }
+        });
+}
+
+function updateApiKey() {
+    const form = document.getElementById('editApiKeyForm');
+    const formData = new FormData(form);
+    const apiKey = formData.get('api_key');
+    const data = {
+        name: formData.get('name'),
+        description: formData.get('description'),
+        rate_limit: parseInt(formData.get('rate_limit')),
+        token_limit: parseInt(formData.get('token_limit'))
+    };
+    
+    fetch(`/api/ollama-gateway/api-keys/${encodeURIComponent(apiKey)}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            bootstrap.Modal.getInstance(document.getElementById('editApiKeyModal')).hide();
+            refreshApiKeys();
+            alert('API key updated successfully');
+        } else {
+            alert('Error: ' + (data.error || 'Failed to update API key'));
+        }
+    })
+    .catch(error => {
+        console.error('Error updating API key:', error);
+        alert('Error updating API key');
+    });
+}
+
+function revokeApiKey(apiKey) {
+    if (!confirm('Are you sure you want to revoke this API key?')) return;
+    
+    fetch(`/api/ollama-gateway/api-keys/${encodeURIComponent(apiKey)}/revoke`, {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            refreshApiKeys();
+            alert('API key revoked successfully');
+        } else {
+            alert('Error: ' + (data.error || 'Failed to revoke API key'));
+        }
+    })
+    .catch(error => {
+        console.error('Error revoking API key:', error);
+        alert('Error revoking API key');
+    });
+}
+
+function deleteApiKey(apiKey) {
+    if (!confirm('Are you sure you want to delete this API key? This action cannot be undone!')) return;
+    
+    fetch(`/api/ollama-gateway/api-keys/${encodeURIComponent(apiKey)}`, {
+        method: 'DELETE'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            refreshApiKeys();
+            refreshOverview();
+            alert('API key deleted successfully');
+        } else {
+            alert('Error: ' + (data.error || 'Failed to delete API key'));
+        }
+    })
+    .catch(error => {
+        console.error('Error deleting API key:', error);
+        alert('Error deleting API key');
+    });
+}
+
+function loadStatistics() {
+    const apiKey = document.getElementById('statistics-api-key-select').value;
+    const url = `/api/ollama-gateway/statistics${apiKey ? '?api_key=' + encodeURIComponent(apiKey) : ''}`;
+    
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayStatistics(data.statistics, apiKey);
+            } else {
+                showError('statistics-content', data.error || 'Failed to load statistics');
+            }
+        })
+        .catch(error => {
+            console.error('Error loading statistics:', error);
+            showError('statistics-content', 'Failed to load statistics');
+        });
+}
+
+function displayStatistics(stats, apiKey) {
+    const container = document.getElementById('statistics-content');
+    
+    if (apiKey) {
+        // Single key statistics
+        container.innerHTML = `
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Statistics for API Key</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <div class="card bg-primary text-white">
+                                <div class="card-body text-center">
+                                    <h4>${formatNumber(stats.usage.tokens_used_today || 0)}</h4>
+                                    <small>Tokens Today</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-info text-white">
+                                <div class="card-body text-center">
+                                    <h4>${formatNumber(stats.usage.tokens_used_total || 0)}</h4>
+                                    <small>Total Tokens</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-success text-white">
+                                <div class="card-body text-center">
+                                    <h4>${stats.usage.requests_today || 0}</h4>
+                                    <small>Requests Today</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-warning text-white">
+                                <div class="card-body text-center">
+                                    <h4>${stats.usage.requests_total || 0}</h4>
+                                    <small>Total Requests</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <p><strong>Last Used:</strong> ${stats.usage.last_used ? new Date(stats.usage.last_used).toLocaleString() : 'Never'}</p>
+                    <h6>Model Usage</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead><tr><th>Model</th><th>Usage Count</th></tr></thead>
+                            <tbody>
+                                ${Object.entries(stats.statistics.model_usage || {}).map(([model, count]) => 
+                                    `<tr><td>${escapeHtml(model)}</td><td>${count}</td></tr>`
+                                ).join('') || '<tr><td colspan="2">No model usage data</td></tr>'}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        `;
+    } else {
+        // Aggregate statistics
+        container.innerHTML = `
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Aggregate Statistics</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <div class="card bg-primary text-white">
+                                <div class="card-body text-center">
+                                    <h4>${stats.total_api_keys || 0}</h4>
+                                    <small>Total API Keys</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-success text-white">
+                                <div class="card-body text-center">
+                                    <h4>${stats.active_api_keys || 0}</h4>
+                                    <small>Active Keys</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-info text-white">
+                                <div class="card-body text-center">
+                                    <h4>${formatNumber(stats.total_tokens || 0)}</h4>
+                                    <small>Total Tokens</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-warning text-white">
+                                <div class="card-body text-center">
+                                    <h4>${stats.total_requests || 0}</h4>
+                                    <small>Total Requests</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card bg-secondary text-white">
+                                <div class="card-body text-center">
+                                    <h4>${formatNumber(stats.tokens_today || 0)}</h4>
+                                    <small>Tokens Today</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card bg-secondary text-white">
+                                <div class="card-body text-center">
+                                    <h4>${stats.requests_today || 0}</h4>
+                                    <small>Requests Today</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+}
+
+
+function refreshQueueStatus() {
+    fetch('/api/ollama-gateway/queue/status')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const status = data.status;
+                const container = document.getElementById('queue-status-content');
+                
+                if (status.tasks && status.tasks.length > 0) {
+                    // Show per-task queue status
+                    let html = '<div class="table-responsive"><table class="table table-hover">';
+                    html += '<thead><tr><th>Gateway</th><th>Queue Length</th><th>Max Size</th><th>Status</th></tr></thead><tbody>';
+                    
+                    status.tasks.forEach(task => {
+                        const percentage = ((task.queue_length || 0) / (task.max_queue_size || 1)) * 100;
+                        html += `
+                            <tr>
+                                <td><strong>${escapeHtml(task.task_name)}</strong></td>
+                                <td>${task.queue_length || 0}</td>
+                                <td>${task.max_queue_size || 0}</td>
+                                <td>
+                                    <div class="progress" style="height: 20px;">
+                                        <div class="progress-bar" role="progressbar" 
+                                             style="width: ${percentage}%"
+                                             aria-valuenow="${task.queue_length || 0}" 
+                                             aria-valuemin="0" 
+                                             aria-valuemax="${task.max_queue_size || 1}">
+                                            ${task.queue_length || 0}
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                    
+                    html += '</tbody></table></div>';
+                    html += `<div class="mt-3"><strong>Total Queue Length:</strong> ${status.total_queue_length || 0}</div>`;
+                    container.innerHTML = html;
+                } else if (!status.redis_connected) {
+                    container.innerHTML = `
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle me-1"></i>
+                            <strong>No active gateways:</strong> Create and start a gateway configuration to process queues.
+                        </div>
+                    `;
+                } else {
+                    container.innerHTML = '<p class="text-muted">No queue data available</p>';
+                }
+            } else {
+                showError('queue-status-content', data.error || 'Failed to load queue status');
+            }
+        })
+        .catch(error => {
+            console.error('Error loading queue status:', error);
+            showError('queue-status-content', 'Failed to load queue status');
+        });
+}
+
+// Utility functions
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function formatNumber(num) {
+    return new Intl.NumberFormat().format(num);
+}
+
+// Task Management Functions
+function refreshTasks() {
+    fetch('/api/ollama-gateway/tasks')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayTasks(data.tasks);
+            } else {
+                showError('tasks-list', data.error || 'Failed to load tasks');
+            }
+        })
+        .catch(error => {
+            console.error('Error loading tasks:', error);
+            showError('tasks-list', 'Failed to load tasks');
+        });
+}
+
+function displayTasks(tasks) {
+    const container = document.getElementById('tasks-list');
+    if (!tasks || tasks.length === 0) {
+        container.innerHTML = '<p class="text-muted">No gateway configurations found. Create one to get started.</p>';
+        return;
+    }
+    
+    let html = '<div class="table-responsive"><table class="table table-hover">';
+    html += '<thead><tr><th>Name</th><th>Mode</th><th>Ollama URL</th><th>Redis</th><th>Status</th><th>Processed</th><th>Failed</th><th>Last Activity</th><th>Actions</th></tr></thead><tbody>';
+    
+    tasks.forEach(task => {
+        const statusBadge = task.is_running 
+            ? '<span class="badge bg-success">Running</span>'
+            : '<span class="badge bg-secondary">Stopped</span>';
+        const modeBadge = (task.mode || 'redis') === 'direct'
+            ? '<span class="badge bg-info">Direct</span>'
+            : '<span class="badge bg-warning">Redis Queue</span>';
+        const lastActivity = task.last_activity 
+            ? new Date(task.last_activity).toLocaleString()
+            : 'Never';
+        
+        html += `
+            <tr>
+                <td>
+                    <strong>${escapeHtml(task.name)}</strong><br>
+                    <small class="text-muted">${escapeHtml(task.description || '')}</small>
+                </td>
+                <td>${modeBadge}</td>
+                <td><small>${escapeHtml(task.ollama_url || 'N/A')}</small></td>
+                <td><small>${(task.mode || 'redis') === 'direct' ? '<span class="text-muted">N/A (Direct Mode)</span>' : `${escapeHtml(task.redis_host || 'N/A')}:${task.redis_port || 'N/A'}`}</small></td>
+                <td>${statusBadge}</td>
+                <td>${task.processed_jobs || 0}</td>
+                <td>${task.failed_jobs || 0}</td>
+                <td><small>${lastActivity}</small></td>
+                <td>
+                    ${task.is_running 
+                        ? `<button class="btn btn-sm btn-warning" onclick="stopTask('${escapeHtml(task.task_id)}')" data-requires-edit title="Stop">
+                            <i class="fas fa-stop"></i> Stop
+                        </button>`
+                        : `<button class="btn btn-sm btn-success" onclick="startTask('${escapeHtml(task.task_id)}')" data-requires-edit title="Start">
+                            <i class="fas fa-play"></i> Start
+                        </button>`
+                    }
+                    <button class="btn btn-sm btn-info" onclick="showTaskMonitor('${escapeHtml(task.task_id)}', '${escapeHtml(task.name)}')" title="Monitor">
+                        <i class="fas fa-eye"></i> Monitor
+                    </button>
+                    <button class="btn btn-sm btn-success" onclick="showApiExamples('${escapeHtml(task.task_id)}', '${escapeHtml(task.name)}')" title="API Examples">
+                        <i class="fas fa-code"></i> API
+                    </button>
+                    <button class="btn btn-sm btn-primary" onclick="editTask('${escapeHtml(task.task_id)}')" data-requires-edit title="Edit" ${task.is_running ? 'disabled' : ''}>
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteTask('${escapeHtml(task.task_id)}')" data-requires-edit title="Delete">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+    
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+}
+
+function showCreateTaskModal() {
+    document.getElementById('taskForm').reset();
+    const modal = new bootstrap.Modal(document.getElementById('createTaskModal'));
+    modal.show();
+}
+
+function toggleRedisFields() {
+    const mode = document.getElementById('taskMode').value;
+    const redisSection = document.getElementById('redisConfigSection');
+    const redisHeader = document.getElementById('redisConfigHeader');
+    
+    if (mode === 'direct') {
+        redisSection.style.display = 'none';
+        redisHeader.style.display = 'none';
+        // Make Redis fields not required
+        ['taskRedisHost', 'taskRedisPort', 'taskRedisDb', 'taskMaxQueueSize'].forEach(id => {
+            const field = document.getElementById(id);
+            if (field) field.removeAttribute('required');
+        });
+    } else {
+        redisSection.style.display = 'block';
+        redisHeader.style.display = 'block';
+        // Make Redis fields required
+        ['taskRedisHost', 'taskRedisPort', 'taskRedisDb', 'taskMaxQueueSize'].forEach(id => {
+            const field = document.getElementById(id);
+            if (field) field.setAttribute('required', 'required');
+        });
+    }
+}
+
+function toggleEditRedisFields() {
+    const mode = document.getElementById('editTaskMode').value;
+    const redisSection = document.getElementById('editRedisConfigSection');
+    const redisHeader = document.getElementById('editRedisConfigHeader');
+    
+    if (mode === 'direct') {
+        redisSection.style.display = 'none';
+        redisHeader.style.display = 'none';
+        // Make Redis fields not required
+        ['editTaskRedisHost', 'editTaskRedisPort', 'editTaskRedisDb', 'editTaskMaxQueueSize'].forEach(id => {
+            const field = document.getElementById(id);
+            if (field) field.removeAttribute('required');
+        });
+    } else {
+        redisSection.style.display = 'block';
+        redisHeader.style.display = 'block';
+        // Make Redis fields required
+        ['editTaskRedisHost', 'editTaskRedisPort', 'editTaskRedisDb', 'editTaskMaxQueueSize'].forEach(id => {
+            const field = document.getElementById(id);
+            if (field) field.setAttribute('required', 'required');
+        });
+    }
+}
+
+function createTask() {
+    const form = document.getElementById('taskForm');
+    const formData = new FormData(form);
+    const data = {};
+    const mode = document.getElementById('taskMode').value;
+    
+    formData.forEach((value, key) => {
+        if (value) {
+            // Convert numeric fields
+            if (['gateway_port', 'redis_port', 'redis_db', 'max_queue_size', 'default_rate_limit', 'default_token_limit'].includes(key)) {
+                data[key] = parseInt(value);
+            } else {
+                data[key] = value;
+            }
+        }
+    });
+    
+    // Add mode
+    data['mode'] = mode;
+    
+    fetch('/api/ollama-gateway/tasks', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            bootstrap.Modal.getInstance(document.getElementById('createTaskModal')).hide();
+            refreshTasks();
+            alert('Gateway configuration created successfully');
+        } else {
+            alert('Error: ' + (data.error || 'Failed to create gateway configuration'));
+        }
+    })
+    .catch(error => {
+        console.error('Error creating gateway configuration:', error);
+        alert('Error creating gateway configuration');
+    });
+}
+
+function editTask(taskId) {
+    fetch('/api/ollama-gateway/tasks')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const task = data.tasks.find(t => t.task_id === taskId);
+                if (task) {
+                    if (task.is_running) {
+                        alert('Cannot edit a running gateway. Stop it first.');
+                        return;
+                    }
+                    
+                    document.getElementById('editTaskId').value = task.task_id;
+                    document.getElementById('editTaskName').value = task.name;
+                    document.getElementById('editTaskDescription').value = task.description || '';
+                    document.getElementById('editTaskMode').value = task.mode || 'redis';
+                    document.getElementById('editTaskOllamaUrl').value = task.ollama_url || '';
+                    document.getElementById('editTaskGatewayPort').value = task.gateway_port || '';
+                    document.getElementById('editTaskRedisHost').value = task.redis_host || '';
+                    document.getElementById('editTaskRedisPort').value = task.redis_port || '';
+                    document.getElementById('editTaskRedisDb').value = task.redis_db || '';
+                    document.getElementById('editTaskRedisPassword').value = '';
+                    document.getElementById('editTaskMaxQueueSize').value = task.max_queue_size || '';
+                    document.getElementById('editTaskDefaultRateLimit').value = task.default_rate_limit || '';
+                    document.getElementById('editTaskDefaultTokenLimit').value = task.default_token_limit || '';
+                    
+                    toggleEditRedisFields(); // Update visibility based on mode
+                    
+                    const modal = new bootstrap.Modal(document.getElementById('editTaskModal'));
+                    modal.show();
+                }
+            }
+        });
+}
+
+function updateTask() {
+    const form = document.getElementById('editTaskForm');
+    const formData = new FormData(form);
+    const taskId = formData.get('task_id');
+    const mode = document.getElementById('editTaskMode').value;
+    const data = {};
+    formData.forEach((value, key) => {
+        if (key !== 'task_id' && value) {
+            // Convert numeric fields
+            if (['gateway_port', 'redis_port', 'redis_db', 'max_queue_size', 'default_rate_limit', 'default_token_limit'].includes(key)) {
+                data[key] = parseInt(value);
+            } else {
+                data[key] = value;
+            }
+        }
+    });
+    
+    // Add mode
+    data['mode'] = mode;
+    
+    fetch(`/api/ollama-gateway/tasks/${encodeURIComponent(taskId)}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            bootstrap.Modal.getInstance(document.getElementById('editTaskModal')).hide();
+            refreshTasks();
+            alert('Gateway configuration updated successfully');
+        } else {
+            alert('Error: ' + (data.error || 'Failed to update gateway configuration'));
+        }
+    })
+    .catch(error => {
+        console.error('Error updating gateway configuration:', error);
+        alert('Error updating gateway configuration');
+    });
+}
+
+function startTask(taskId) {
+    fetch(`/api/ollama-gateway/tasks/${encodeURIComponent(taskId)}/start`, {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            refreshTasks();
+            alert('Task started successfully');
+        } else {
+            alert('Error: ' + (data.error || 'Failed to start task'));
+        }
+    })
+    .catch(error => {
+        console.error('Error starting task:', error);
+        alert('Error starting task');
+    });
+}
+
+function stopTask(taskId) {
+    if (!confirm('Are you sure you want to stop this task?')) return;
+    
+    fetch(`/api/ollama-gateway/tasks/${encodeURIComponent(taskId)}/stop`, {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            refreshTasks();
+            alert('Task stopped successfully');
+        } else {
+            alert('Error: ' + (data.error || 'Failed to stop task'));
+        }
+    })
+    .catch(error => {
+        console.error('Error stopping task:', error);
+        alert('Error stopping task');
+    });
+}
+
+function deleteTask(taskId) {
+    if (!confirm('Are you sure you want to delete this task? This action cannot be undone!')) return;
+    
+    fetch(`/api/ollama-gateway/tasks/${encodeURIComponent(taskId)}`, {
+        method: 'DELETE'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            refreshTasks();
+            alert('Task deleted successfully');
+        } else {
+            alert('Error: ' + (data.error || 'Failed to delete task'));
+        }
+    })
+    .catch(error => {
+        console.error('Error deleting task:', error);
+        alert('Error deleting task');
+    });
+}
+
+let currentMonitorTaskId = null;
+
+function showTaskMonitor(taskId, taskName) {
+    currentMonitorTaskId = taskId;
+    document.getElementById('taskMonitorModalLabel').textContent = `Task Monitor - ${taskName}`;
+    const modal = new bootstrap.Modal(document.getElementById('taskMonitorModal'));
+    modal.show();
+    refreshTaskMonitor();
+}
+
+function refreshTaskMonitor() {
+    if (!currentMonitorTaskId) return;
+    
+    fetch(`/api/ollama-gateway/tasks/${encodeURIComponent(currentMonitorTaskId)}/monitor?limit=50`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayTaskMonitor(data.jobs);
+            } else {
+                showError('task-monitor-content', data.error || 'Failed to load job history');
+            }
+        })
+        .catch(error => {
+            console.error('Error loading task monitor:', error);
+            showError('task-monitor-content', 'Failed to load job history');
+        });
+}
+
+let currentApiExamplesTaskId = null;
+
+function showApiExamples(taskId, taskName) {
+    currentApiExamplesTaskId = taskId;
+    document.getElementById('apiExamplesModalLabel').textContent = `API Examples - ${taskName}`;
+    const modal = new bootstrap.Modal(document.getElementById('apiExamplesModal'));
+    modal.show();
+    loadApiExamples();
+    loadAvailableModels(taskId);
+}
+
+function loadApiExamples() {
+    if (!currentApiExamplesTaskId) return;
+    
+    fetch(`/api/ollama-gateway/tasks/${encodeURIComponent(currentApiExamplesTaskId)}/api-examples`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                window.currentApiExamples = data.examples; // Store for copy function
+                displayApiExamples(data.examples);
+            } else {
+                showError('api-examples-content', data.error || 'Failed to load API examples');
+            }
+        })
+        .catch(error => {
+            console.error('Error loading API examples:', error);
+            showError('api-examples-content', 'Failed to load API examples');
+        });
+}
+
+function displayApiExamples(examples) {
+    const container = document.getElementById('api-examples-content');
+    
+    if (!examples || !examples.examples) {
+        container.innerHTML = '<p class="text-muted">No API examples available.</p>';
+        return;
+    }
+    
+    let html = `
+        <div class="mb-4">
+            <h6>Gateway Information</h6>
+            <div class="card bg-light">
+                <div class="card-body">
+                    <p class="mb-1"><strong>Gateway URL:</strong> <code>${escapeHtml(examples.gateway_url)}</code></p>
+                    <p class="mb-1"><strong>Gateway WebSocket URL:</strong> <code>${escapeHtml(examples.gateway_ws_url || examples.gateway_url.replace('http://', 'ws://').replace('https://', 'wss://'))}</code></p>
+                    <p class="mb-1"><strong>Ollama URL:</strong> <code>${escapeHtml(examples.ollama_url)}</code></p>
+                    <p class="mb-0"><strong>Sample API Key:</strong> <code>${escapeHtml(examples.sample_api_key)}</code></p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="mb-4">
+            <h6>Available Models</h6>
+            <div class="card">
+                <div class="card-body">
+                    <button class="btn btn-sm btn-primary mb-3" onclick="loadAvailableModels('${currentApiExamplesTaskId}')">
+                        <i class="fas fa-sync-alt me-1"></i>Refresh Models
+                    </button>
+                    <div id="available-models-list">
+                        <i class="fas fa-spinner fa-spin"></i> Loading models...
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="mb-4">
+            <h6>Authentication</h6>
+            <div class="alert alert-info">
+                <p class="mb-1"><strong>Option 1 (Bearer Token):</strong></p>
+                <code>${escapeHtml(examples.authentication.header_bearer)}</code>
+                <p class="mb-1 mt-2"><strong>Option 2 (X-API-Key Header):</strong></p>
+                <code>${escapeHtml(examples.authentication.header_x_api_key)}</code>
+                <p class="mb-0 mt-2"><small>${escapeHtml(examples.authentication.note)}</small></p>
+            </div>
+        </div>
+    `;
+    
+    // Add examples for each endpoint
+    Object.entries(examples.examples).forEach(([endpoint, example]) => {
+        // Special handling for WebSocket endpoint
+        if (endpoint === 'websocket') {
+            html += `
+                <div class="card mb-3 border-info">
+                    <div class="card-header bg-info text-white">
+                        <h6 class="mb-0"><i class="fas fa-plug me-2"></i>${escapeHtml(example.description)}</h6>
+                    </div>
+                    <div class="card-body">
+                        <ul class="nav nav-tabs" role="tablist">
+                            <li class="nav-item">
+                                <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#javascript-${endpoint}" type="button">
+                                    JavaScript
+                                </button>
+                            </li>
+                            <li class="nav-item">
+                                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#python-${endpoint}" type="button">
+                                    Python
+                                </button>
+                            </li>
+                            <li class="nav-item">
+                                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#json-${endpoint}" type="button">
+                                    JSON Request
+                                </button>
+                            </li>
+                        </ul>
+                        <div class="tab-content mt-3">
+                            <div class="tab-pane fade show active" id="javascript-${endpoint}">
+                                <pre class="bg-dark text-light p-3 rounded" id="javascript-${endpoint}-content"><code>${escapeHtml(example.javascript || '')}</code></pre>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="copyToClipboard('${endpoint}', 'javascript')">
+                                    <i class="fas fa-copy"></i> Copy
+                                </button>
+                            </div>
+                            <div class="tab-pane fade" id="python-${endpoint}">
+                                <pre class="bg-dark text-light p-3 rounded" id="python-${endpoint}-content"><code>${escapeHtml(example.python || '')}</code></pre>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="copyToClipboard('${endpoint}', 'python')">
+                                    <i class="fas fa-copy"></i> Copy
+                                </button>
+                            </div>
+                            <div class="tab-pane fade" id="json-${endpoint}">
+                                <pre class="bg-light p-3 rounded" id="json-${endpoint}-content"><code>${JSON.stringify(example.json || {}, null, 2)}</code></pre>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="copyToClipboard('${endpoint}', 'json')">
+                                    <i class="fas fa-copy"></i> Copy
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else {
+            // Regular HTTP endpoint examples
+            html += `
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h6 class="mb-0">${escapeHtml(example.description)}</h6>
+                    </div>
+                    <div class="card-body">
+                        <ul class="nav nav-tabs" role="tablist">
+                            <li class="nav-item">
+                                <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#curl-${endpoint}" type="button">
+                                    cURL
+                                </button>
+                            </li>
+                            <li class="nav-item">
+                                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#json-${endpoint}" type="button">
+                                    JSON
+                                </button>
+                            </li>
+                            <li class="nav-item">
+                                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#python-${endpoint}" type="button">
+                                    Python
+                                </button>
+                            </li>
+                        </ul>
+                        <div class="tab-content mt-3">
+                            <div class="tab-pane fade show active" id="curl-${endpoint}">
+                                <pre class="bg-dark text-light p-3 rounded" id="curl-${endpoint}-content"><code>${escapeHtml(example.curl || '')}</code></pre>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="copyToClipboard('${endpoint}', 'curl')">
+                                    <i class="fas fa-copy"></i> Copy
+                                </button>
+                            </div>
+                            <div class="tab-pane fade" id="json-${endpoint}">
+                                <pre class="bg-light p-3 rounded" id="json-${endpoint}-content"><code>${JSON.stringify(example.json || {}, null, 2)}</code></pre>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="copyToClipboard('${endpoint}', 'json')">
+                                    <i class="fas fa-copy"></i> Copy
+                                </button>
+                            </div>
+                            <div class="tab-pane fade" id="python-${endpoint}">
+                                <pre class="bg-dark text-light p-3 rounded" id="python-${endpoint}-content"><code>${escapeHtml(example.python || '')}</code></pre>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="copyToClipboard('${endpoint}', 'python')">
+                                    <i class="fas fa-copy"></i> Copy
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+    });
+    
+    container.innerHTML = html;
+}
+
+function loadAvailableModels(taskId) {
+    if (!taskId) taskId = currentApiExamplesTaskId;
+    if (!taskId) return;
+    
+    const container = document.getElementById('available-models-list');
+    if (!container) return;
+    
+    fetch(`/api/ollama-gateway/tasks/${encodeURIComponent(taskId)}/models`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.data.models) {
+                displayAvailableModels(data.data.models, data.data.count || 0);
+            } else {
+                const errorMsg = data.data?.error || data.error || 'Failed to load models';
+                container.innerHTML = `
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-1"></i>
+                        ${escapeHtml(errorMsg)}
+                        <br><small>Make sure Ollama is running and accessible at the configured URL.</small>
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            console.error('Error loading models:', error);
+            container.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-circle me-1"></i>
+                    Error loading models: ${escapeHtml(error.message)}
+                </div>
+            `;
+        });
+}
+
+function displayAvailableModels(models, count) {
+    const container = document.getElementById('available-models-list');
+    if (!container) return;
+    
+    if (!models || models.length === 0) {
+        container.innerHTML = '<p class="text-muted">No models available. Make sure Ollama is running and has models installed.</p>';
+        return;
+    }
+    
+    let html = `<p class="mb-2"><strong>Found ${count} model(s):</strong></p>`;
+    html += '<div class="table-responsive"><table class="table table-sm table-hover">';
+    html += '<thead><tr><th>Model Name</th><th>Size</th><th>Modified</th><th>Actions</th></tr></thead><tbody>';
+    
+    models.forEach(model => {
+        const size = model.size ? formatBytes(model.size) : 'N/A';
+        const modified = model.modified_at 
+            ? new Date(model.modified_at).toLocaleString()
+            : 'N/A';
+        
+        html += `
+            <tr>
+                <td><code>${escapeHtml(model.name)}</code></td>
+                <td>${size}</td>
+                <td><small>${modified}</small></td>
+                <td>
+                    <button class="btn btn-sm btn-outline-primary" onclick="useModelInExample('${escapeHtml(model.name)}')" title="Use in examples">
+                        <i class="fas fa-code"></i> Use
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+    
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+}
+
+function formatBytes(bytes) {
+    if (!bytes || bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+function useModelInExample(modelName) {
+    // Update all example JSON to use the selected model
+    const examples = window.currentApiExamples;
+    if (!examples || !examples.examples) {
+        alert('No examples loaded. Please wait for examples to load first.');
+        return;
+    }
+    
+    const gatewayUrl = examples.gateway_url;
+    const apiKey = examples.sample_api_key;
+    
+    console.log('Updating examples with model:', modelName);
+    console.log('Current examples:', examples);
+    
+    Object.keys(examples.examples).forEach(endpoint => {
+        const example = examples.examples[endpoint];
+        
+        // Update JSON model
+        if (example.json && example.json.model) {
+            example.json.model = modelName;
+            console.log(`Updated ${endpoint} JSON model to: ${modelName}`);
+        }
+        
+        // Regenerate cURL command with new model
+        if (endpoint === 'generate') {
+            example.curl = `curl -X POST ${gatewayUrl}/api/generate \\
+  -H "Authorization: Bearer ${apiKey}" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "model": "${modelName}",
+    "prompt": "Why is the sky blue?",
+    "stream": false
+  }'`;
+        } else if (endpoint === 'chat') {
+            example.curl = `curl -X POST ${gatewayUrl}/api/chat \\
+  -H "Authorization: Bearer ${apiKey}" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "model": "${modelName}",
+    "messages": [
+      {"role": "user", "content": "Hello!"}
+    ]
+  }'`;
+        } else if (endpoint === 'embeddings') {
+            example.curl = `curl -X POST ${gatewayUrl}/api/embeddings \\
+  -H "Authorization: Bearer ${apiKey}" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "model": "${modelName}",
+    "prompt": "Hello world"
+  }'`;
+        }
+        
+        // Regenerate Python code with new model
+        if (endpoint === 'generate') {
+            example.python = `import requests
+
+url = "${gatewayUrl}/api/generate"
+headers = {
+    "Authorization": "Bearer ${apiKey}",
+    "Content-Type": "application/json"
+}
+data = {
+    "model": "${modelName}",
+    "prompt": "Why is the sky blue?",
+    "stream": False
+}
+
+response = requests.post(url, json=data, headers=headers)
+print(response.json())`;
+        } else if (endpoint === 'chat') {
+            example.python = `import requests
+
+url = "${gatewayUrl}/api/chat"
+headers = {
+    "Authorization": "Bearer ${apiKey}",
+    "Content-Type": "application/json"
+}
+data = {
+    "model": "${modelName}",
+    "messages": [
+        {"role": "user", "content": "Hello!"}
+    ]
+}
+
+response = requests.post(url, json=data, headers=headers)
+print(response.json())`;
+        } else if (endpoint === 'embeddings') {
+            example.python = `import requests
+
+url = "${gatewayUrl}/api/embeddings"
+headers = {
+    "Authorization": "Bearer ${apiKey}",
+    "Content-Type": "application/json"
+}
+data = {
+    "model": "${modelName}",
+    "prompt": "Hello world"
+}
+
+response = requests.post(url, json=data, headers=headers)
+print(response.json())`;
+        }
+        
+        console.log(`Updated ${endpoint} curl and python examples`);
+    });
+    
+    // Update stored examples
+    window.currentApiExamples = examples;
+    console.log('Updated examples:', examples);
+    
+    // Update the displayed content directly without full re-render
+    Object.keys(examples.examples).forEach(endpoint => {
+        const example = examples.examples[endpoint];
+        
+        // Update cURL content
+        const curlElement = document.getElementById(`curl-${endpoint}-content`);
+        if (curlElement) {
+            curlElement.querySelector('code').textContent = example.curl;
+        }
+        
+        // Update JSON content
+        const jsonElement = document.getElementById(`json-${endpoint}-content`);
+        if (jsonElement) {
+            jsonElement.querySelector('code').textContent = JSON.stringify(example.json, null, 2);
+        }
+        
+        // Update Python content
+        const pythonElement = document.getElementById(`python-${endpoint}-content`);
+        if (pythonElement) {
+            pythonElement.querySelector('code').textContent = example.python;
+        }
+    });
+    
+    alert(`Updated all examples to use model: ${modelName}`);
+}
+
+function copyToClipboard(endpoint, type) {
+    const examples = window.currentApiExamples || {};
+    if (!examples.examples || !examples.examples[endpoint]) return;
+    
+    let text = '';
+    if (type === 'curl') {
+        text = examples.examples[endpoint].curl;
+    } else if (type === 'json') {
+        text = JSON.stringify(examples.examples[endpoint].json, null, 2);
+    } else if (type === 'python') {
+        text = examples.examples[endpoint].python;
+    } else if (type === 'javascript') {
+        text = examples.examples[endpoint].javascript;
+    }
+    
+    navigator.clipboard.writeText(text).then(() => {
+        alert('Copied to clipboard!');
+    }).catch(err => {
+        console.error('Failed to copy:', err);
+    });
+}
+
+function displayTaskMonitor(jobs) {
+    const container = document.getElementById('task-monitor-content');
+    
+    if (!jobs || jobs.length === 0) {
+        container.innerHTML = '<p class="text-muted">No job history available yet.</p>';
+        return;
+    }
+    
+    // Reverse to show newest first
+    const reversedJobs = [...jobs].reverse();
+    
+    let html = '<div class="table-responsive"><table class="table table-sm table-hover">';
+    html += '<thead><tr><th>Time</th><th>Job ID</th><th>API Key</th><th>Endpoint</th><th>Method</th><th>Status</th><th>Status Code</th><th>Tokens</th></tr></thead><tbody>';
+    
+    reversedJobs.forEach(job => {
+        const statusBadge = job.status === 'completed' 
+            ? '<span class="badge bg-success">Completed</span>'
+            : job.status === 'failed'
+            ? '<span class="badge bg-danger">Failed</span>'
+            : '<span class="badge bg-warning">Error</span>';
+        
+        const time = job.completed_at 
+            ? new Date(job.completed_at).toLocaleString()
+            : job.created_at 
+            ? new Date(job.created_at).toLocaleString()
+            : 'N/A';
+        
+        html += `
+            <tr>
+                <td><small>${time}</small></td>
+                <td><code>${escapeHtml(job.job_id || 'N/A')}</code></td>
+                <td><small>${escapeHtml(job.api_key || 'N/A')}</small></td>
+                <td><small>${escapeHtml(job.endpoint || 'N/A')}</small></td>
+                <td><small>${escapeHtml(job.method || 'N/A')}</small></td>
+                <td>${statusBadge}</td>
+                <td>${job.status_code || 'N/A'}</td>
+                <td>${job.tokens_used ? formatNumber(job.tokens_used) : 'N/A'}</td>
+            </tr>
+        `;
+    });
+    
+    html += '</tbody></table></div>';
+    html += `<div class="mt-2"><small class="text-muted">Showing latest ${jobs.length} jobs</small></div>`;
+    container.innerHTML = html;
+}
+</script>
+{% endblock %}
+
