@@ -92,6 +92,9 @@ function PortsPageContent() {
           <Link href="/autossh" className="btn btn-secondary">
             Autossh
           </Link>
+          <Link href="/litellm" className="btn btn-secondary">
+            LiteLLM
+          </Link>
         </div>
       </nav>
 

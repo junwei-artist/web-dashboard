@@ -14,6 +14,7 @@ from rsync_manager import RsyncManager
 from postgres_sync_manager import PostgresSyncManager
 from autossh_manager import AutosshManager
 from ollama_gateway_manager import OllamaGatewayManager
+from litellm_manager import LiteLLMManager
 from auth import auth_manager, login_manager, can_edit_required
 import logging
 import json
@@ -38,6 +39,7 @@ rsync_manager = RsyncManager()
 postgres_sync_manager = PostgresSyncManager()
 autossh_manager = AutosshManager()
 ollama_gateway_manager = OllamaGatewayManager()
+litellm_manager = LiteLLMManager()
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -1529,6 +1531,212 @@ def get_ollama_task_models(task_id):
         return jsonify({'success': models.get('success', True), 'data': models})
     except Exception as e:
         logger.error(f"Error getting models: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# LiteLLM routes
+@app.route('/litellm')
+@login_required
+def litellm_page():
+    """LiteLLM management page."""
+    return render_template('litellm.html')
+
+@app.route('/api/litellm/tasks', methods=['GET'])
+@login_required
+def get_litellm_tasks():
+    """Get all tasks."""
+    try:
+        tasks = litellm_manager.get_all_tasks()
+        return jsonify({'success': True, 'tasks': tasks})
+    except Exception as e:
+        logger.error(f"Error getting tasks: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/litellm/tasks', methods=['POST'])
+@login_required
+@can_edit_required
+def create_litellm_task():
+    """Create a new task."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'Request body required'}), 400
+        
+        task_id = litellm_manager.add_task(data)
+        return jsonify({'success': True, 'task_id': task_id, 'message': 'Task created successfully'})
+    except Exception as e:
+        logger.error(f"Error creating task: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/litellm/tasks/<task_id>', methods=['PUT'])
+@login_required
+@can_edit_required
+def update_litellm_task(task_id):
+    """Update a task."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'Request body required'}), 400
+        
+        success = litellm_manager.update_task(task_id, data)
+        if success:
+            return jsonify({'success': True, 'message': 'Task updated successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'Task not found or is running'}), 404
+    except Exception as e:
+        logger.error(f"Error updating task: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/litellm/tasks/<task_id>', methods=['DELETE'])
+@login_required
+@can_edit_required
+def delete_litellm_task(task_id):
+    """Delete a task."""
+    try:
+        success = litellm_manager.delete_task(task_id)
+        if success:
+            return jsonify({'success': True, 'message': 'Task deleted successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'Task not found'}), 404
+    except Exception as e:
+        logger.error(f"Error deleting task: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/litellm/tasks/<task_id>/start', methods=['POST'])
+@login_required
+@can_edit_required
+def start_litellm_task(task_id):
+    """Start a task."""
+    try:
+        success = litellm_manager.start_task(task_id)
+        if success:
+            return jsonify({'success': True, 'message': 'Task started successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'Task not found or already running'}), 400
+    except Exception as e:
+        logger.error(f"Error starting task: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/litellm/tasks/<task_id>/stop', methods=['POST'])
+@login_required
+@can_edit_required
+def stop_litellm_task(task_id):
+    """Stop a task."""
+    try:
+        success = litellm_manager.stop_task(task_id)
+        if success:
+            return jsonify({'success': True, 'message': 'Task stopped successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'Task not found or not running'}), 400
+    except Exception as e:
+        logger.error(f"Error stopping task: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/litellm/tasks/<task_id>/api-keys', methods=['GET'])
+@login_required
+def get_litellm_task_api_keys(task_id):
+    """Get all API keys for a task."""
+    try:
+        keys = litellm_manager.get_task_api_keys(task_id)
+        return jsonify({'success': True, 'api_keys': keys})
+    except Exception as e:
+        logger.error(f"Error getting API keys: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/litellm/tasks/<task_id>/api-keys', methods=['POST'])
+@login_required
+@can_edit_required
+def create_litellm_api_key(task_id):
+    """Create a new API key for a task."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'Request body required'}), 400
+        
+        result = litellm_manager.generate_api_key(
+            task_id=task_id,
+            name=data.get('name', ''),
+            description=data.get('description', '')
+        )
+        return jsonify({'success': True, **result})
+    except Exception as e:
+        logger.error(f"Error creating API key: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/litellm/api-keys/<api_key>/revoke', methods=['POST'])
+@login_required
+@can_edit_required
+def revoke_litellm_api_key(api_key):
+    """Revoke an API key."""
+    try:
+        success = litellm_manager.revoke_api_key(api_key)
+        if success:
+            return jsonify({'success': True, 'message': 'API key revoked successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'API key not found'}), 404
+    except Exception as e:
+        logger.error(f"Error revoking API key: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/litellm/api-keys/<api_key>', methods=['DELETE'])
+@login_required
+@can_edit_required
+def delete_litellm_api_key(api_key):
+    """Delete an API key."""
+    try:
+        success = litellm_manager.delete_api_key(api_key)
+        if success:
+            return jsonify({'success': True, 'message': 'API key deleted successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'API key not found'}), 404
+    except Exception as e:
+        logger.error(f"Error deleting API key: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/litellm/statistics', methods=['GET'])
+@login_required
+def get_litellm_statistics():
+    """Get statistics for task(s) or API key(s)."""
+    try:
+        task_id = request.args.get('task_id')
+        api_key = request.args.get('api_key')
+        stats = litellm_manager.get_statistics(task_id=task_id, api_key=api_key)
+        return jsonify({'success': True, 'statistics': stats})
+    except Exception as e:
+        logger.error(f"Error getting statistics: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/litellm/token-records', methods=['GET'])
+@login_required
+def get_litellm_token_records():
+    """Get token records from database."""
+    try:
+        task_id = request.args.get('task_id')
+        api_key = request.args.get('api_key')
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        limit = request.args.get('limit', 100, type=int)
+        
+        records = litellm_manager.get_token_records(
+            task_id=task_id,
+            api_key=api_key,
+            start_date=start_date,
+            end_date=end_date,
+            limit=limit
+        )
+        return jsonify({'success': True, 'records': records, 'count': len(records)})
+    except Exception as e:
+        logger.error(f"Error getting token records: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/litellm/tasks/<task_id>/api-examples', methods=['GET'])
+@login_required
+def get_litellm_task_api_examples(task_id):
+    """Get API usage examples and instructions for a task."""
+    try:
+        examples = litellm_manager.get_task_api_examples(task_id)
+        return jsonify({'success': True, 'examples': examples})
+    except Exception as e:
+        logger.error(f"Error getting API examples: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.errorhandler(403)

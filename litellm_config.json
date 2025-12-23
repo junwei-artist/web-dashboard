@@ -1,0 +1,83 @@
+{
+  "api_keys": {
+    "sk-litellm_eqlwO3zTHI_kn6vwCj02U9PytF3__tBAp6j8pV2OpJ8": {
+      "task_id": "litellm_1766453184",
+      "name": "generic",
+      "description": "",
+      "created_at": "2025-12-23T09:26:36.169872",
+      "tokens_used_today": 57,
+      "tokens_used_total": 57,
+      "requests_today": 1,
+      "requests_total": 1,
+      "last_used": "2025-12-23T09:30:20.943372",
+      "is_active": true,
+      "statistics": {
+        "daily_tokens": {
+          "2025-12-23": 57
+        },
+        "daily_requests": {
+          "2025-12-23": 1
+        },
+        "model_usage": {
+          "qwen3-vl:30b": 1
+        },
+        "error_count": 0,
+        "success_count": 1
+      }
+    },
+    "sk-litellm_HzTcIfc31qpWxV3Lmr5hLJ082OZ48fGwIoevSKTeM5s": {
+      "task_id": "litellm_1766453184",
+      "name": "second",
+      "description": "",
+      "created_at": "2025-12-23T09:27:11.979768",
+      "tokens_used_today": 0,
+      "tokens_used_total": 0,
+      "requests_today": 0,
+      "requests_total": 0,
+      "last_used": null,
+      "is_active": true,
+      "statistics": {
+        "daily_tokens": {},
+        "daily_requests": {},
+        "model_usage": {},
+        "error_count": 0,
+        "success_count": 0
+      }
+    }
+  },
+  "tasks": {
+    "litellm_1766453184": {
+      "task_id": "litellm_1766453184",
+      "name": "ollama-mac-studio",
+      "description": "ollama-mac-studio",
+      "api_base": "http://10.3.20.26:11434",
+      "model": "qwen3-vl:30b",
+      "master_key": "sales002Q",
+      "port": 11436,
+      "is_running": true,
+      "status": "running",
+      "created_at": "2025-12-23T09:26:24.443963",
+      "last_activity": "2025-12-23T09:30:20.943483",
+      "api_keys": [
+        "sk-litellm_eqlwO3zTHI_kn6vwCj02U9PytF3__tBAp6j8pV2OpJ8",
+        "sk-litellm_HzTcIfc31qpWxV3Lmr5hLJ082OZ48fGwIoevSKTeM5s"
+      ],
+      "total_requests": 1,
+      "total_tokens": 57,
+      "failed_requests": 0
+    }
+  },
+  "token_records": [
+    {
+      "record_id": "record_1766453420943_a375d149e3bcd278",
+      "api_key": "sk-litellm_eqlwO3zTH...",
+      "task_id": "litellm_1766453184",
+      "tokens": 57,
+      "model": "qwen3-vl:30b",
+      "success": true,
+      "error": "",
+      "timestamp": "2025-12-23T09:30:20.943463",
+      "date": "2025-12-23"
+    }
+  ]
+}
